@@ -43,9 +43,9 @@ let seedFile = args[0];
 if (!seedFile) {
   // Check for common default seed file locations
   const defaultLocations = [
+    join(backendDir, "data", "seed", "seed-data.sql"),
     join(backendDir, "seed-data.sql"),
     join(backendDir, "seed.sql"),
-    join(backendDir, "scripts", "seed-data.sql"),
     join(projectRoot, "seed-data.sql"),
   ];
 

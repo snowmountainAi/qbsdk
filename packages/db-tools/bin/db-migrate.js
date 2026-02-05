@@ -41,8 +41,8 @@ const PULL_DELAY_SECONDS = parseInt(env.DB_PULL_DELAY_SECONDS || "5", 10);
 async function runDrizzlePull() {
   return new Promise((resolve, reject) => {
     const configPath = join(backendDir, "drizzle.config.ts");
-    // Use 'yes |' to bypass prompts and 'pipe' to prevent buffer deadlock
-    const proc = spawn("sh", ["-c", `yes | npx drizzle-kit pull --config ${configPath}`], {
+    // Cross-platform: use shell:true and pipe 'y' to stdin to auto-confirm prompts
+    const proc = spawn("npx", ["drizzle-kit", "pull", "--config", configPath], {
       stdio: ["pipe", "pipe", "pipe"],
       shell: true,
       cwd: projectRoot,
@@ -56,7 +56,15 @@ async function runDrizzlePull() {
     proc.stdout?.on("data", (data) => process.stdout.write(data));
     proc.stderr?.on("data", (data) => process.stderr.write(data));
 
+    // Auto-confirm any prompts by sending 'y' repeatedly
+    const confirmInterval = setInterval(() => {
+      if (proc.stdin?.writable) {
+        proc.stdin.write("y\n");
+      }
+    }, 100);
+
     proc.on("close", (code) => {
+      clearInterval(confirmInterval);
       if (code !== 0) reject(new Error(`drizzle-kit pull failed with exit code ${code}`));
       else resolve();
     });
@@ -140,9 +148,17 @@ const pendingMigrations = sqlFiles.filter((f) => !appliedMigrations.includes(f))
 
 if (pendingMigrations.length === 0) {
   console.log("\x1b[32m✓ Database is up to date.\x1b[0m");
+  // Output structured summary for parsing
+  console.log(`\n__MIGRATION_SUMMARY__:${JSON.stringify({
+    migrations_applied: 0,
+    files_applied: [],
+    already_applied: appliedMigrations,
+    status: "up_to_date"
+  })}`);
   process.exit(0);
 }
 
+const appliedThisRun = [];
 for (const sqlFile of pendingMigrations) {
   console.log(`Applying: ${sqlFile}...`);
   try {
@@ -164,18 +180,36 @@ for (const sqlFile of pendingMigrations) {
       proc.stdin?.end();
     });
     await recordMigration(sqlFile);
+    appliedThisRun.push(sqlFile);
     console.log(`\x1b[32m✓ ${sqlFile} applied\x1b[0m`);
   } catch (error) {
     console.error(`\x1b[31mError applying ${sqlFile}: ${error.message}\x1b[0m`);
+    // Output partial summary on failure
+    console.log(`\n__MIGRATION_SUMMARY__:${JSON.stringify({
+      migrations_applied: appliedThisRun.length,
+      files_applied: appliedThisRun,
+      failed_file: sqlFile,
+      status: "failed"
+    })}`);
     process.exit(1);
   }
 }
 
 console.log("\n🔄 Syncing schema...");
+let schemaSynced = false;
 try {
   await runDrizzlePull();
+  schemaSynced = true;
   console.log("\x1b[32m✓ All migrations applied and schema synced!\x1b[0m");
 } catch {
   console.error("\x1b[33m⚠ Migration successful but schema sync failed.\x1b[0m");
 }
+// Output structured summary for parsing
+console.log(`\n__MIGRATION_SUMMARY__:${JSON.stringify({
+  migrations_applied: appliedThisRun.length,
+  files_applied: appliedThisRun,
+  already_applied: appliedMigrations,
+  schema_synced: schemaSynced,
+  status: "success"
+})}`);
 process.exit(0);

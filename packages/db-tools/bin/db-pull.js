@@ -46,8 +46,8 @@ console.log("Running drizzle-kit pull...\n");
 
 async function runDrizzlePull() {
   return new Promise((resolve, reject) => {
-    // Use 'yes |' to bypass prompts
-    const proc = spawn("sh", ["-c", `yes | npx drizzle-kit pull --config ${drizzleConfigPath}`], {
+    // Cross-platform: use shell:true and pipe 'y' to stdin to auto-confirm prompts
+    const proc = spawn("npx", ["drizzle-kit", "pull", "--config", drizzleConfigPath], {
       stdio: ["pipe", "pipe", "pipe"],
       shell: true,
       cwd: projectRoot,
@@ -61,7 +61,15 @@ async function runDrizzlePull() {
     proc.stdout?.on("data", (data) => process.stdout.write(data));
     proc.stderr?.on("data", (data) => process.stderr.write(data));
 
+    // Auto-confirm any prompts by sending 'y' repeatedly
+    const confirmInterval = setInterval(() => {
+      if (proc.stdin?.writable) {
+        proc.stdin.write("y\n");
+      }
+    }, 100);
+
     proc.on("close", (code) => {
+      clearInterval(confirmInterval);
       if (code !== 0) reject(new Error(`drizzle-kit pull failed with exit code ${code}`));
       else resolve();
     });
