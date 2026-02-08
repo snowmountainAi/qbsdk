@@ -267,29 +267,27 @@ async function waitForDeployment(projectId, deploymentId) {
   console.log("Waiting for deployment to be ready...");
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      const deployment = await makeDenoRequest(
-        `/deployments/${deploymentId}`
-      );
+    const deployment = await makeDenoRequest(
+      `/deployments/${deploymentId}`
+    );
 
-      if (deployment.status === "success") {
-        console.log("Deployment is ready!");
-        return deployment;
-      }
-
-      if (deployment.status === "failed") {
-        console.log("Deployment failed, getting build logs...");
-        const logs = await makeDenoRequest(`/deployments/${deploymentId}/build_logs`, { headers: { accept: "application/json" } });
-        throw new Error(`Deployment failed: ${JSON.stringify(logs)}`);
-      }
-
-      if (deployment.status === "error") {
-        throw new Error("Deployment failed");
-      }
-
-      console.log(`   Attempt ${attempt}/${maxAttempts}: Status is ${deployment.status}, waiting...`);
-      await new Promise(resolve => setTimeout(resolve, waitInterval));
+    if (deployment.status === "success") {
+      console.log("Deployment is ready!");
+      return deployment;
     }
+
+    if (deployment.status === "failed") {
+      console.log("Deployment failed, getting build logs...");
+      const logs = await makeDenoRequest(`/deployments/${deploymentId}/build_logs`, { headers: { accept: "application/json" } });
+      throw new Error(`Deployment failed: ${JSON.stringify(logs)}`);
+    }
+
+    if (deployment.status === "error") {
+      throw new Error("Deployment failed");
+    }
+
+    console.log(`   Attempt ${attempt}/${maxAttempts}: Status is ${deployment.status}, waiting...`);
+    await new Promise(resolve => setTimeout(resolve, waitInterval));
   }
 
   throw new Error("Deployment timeout - please check manually");
