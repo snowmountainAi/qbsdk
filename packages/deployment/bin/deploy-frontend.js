@@ -11,7 +11,6 @@
 //   CDN_ACCESS_KEY_ID  - CDN Store credentials
 //   CDN_SECRET_ACCESS_KEY
 //   CDN_BUCKET_NAME    - CDN bucket name
-//   QWIKBUILD_PLATFORM_API_KEY - API key for platform notification
 
 // Optional env vars:
 //   CDN_REGION         - CDN region (default: ap-south-1)
@@ -23,47 +22,36 @@ import { readFileSync, existsSync, readdirSync, statSync, lstatSync } from "node
 import { join, relative, extname } from "node:path";
 import { spawn } from "node:child_process";
 import { S3Client, PutObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
-import dotenv from "dotenv";
+import { loadEnv, requireEnvVars, platformApiCall, ROOT_DIR } from "./lib/common.js";
 
-const ROOT_DIR = process.cwd();
+loadEnv();
 
-// Load .env from root directory (if it exists), but don't override existing env vars
-const rootEnvPath = join(ROOT_DIR, ".env");
-if (existsSync(rootEnvPath)) {
-  dotenv.config({ path: rootEnvPath, override: false });
-}
+const env = requireEnvVars([
+  "VITE_API_BASE_URL",
+  "VITE_APP_ID",
+  "URL_SLUG",
+  "CDN_ACCESS_KEY_ID",
+  "CDN_SECRET_ACCESS_KEY",
+  "CDN_BUCKET_NAME",
+]);
 
-// Configuration
-const VITE_API_BASE_URL = process.env.VITE_API_BASE_URL;
-const VITE_APP_ID = process.env.VITE_APP_ID;
-const URL_SLUG = process.env.URL_SLUG;
-const CDN_ACCESS_KEY_ID = process.env.CDN_ACCESS_KEY_ID;
-const CDN_SECRET_ACCESS_KEY = process.env.CDN_SECRET_ACCESS_KEY;
+// Optional configuration
 const CDN_REGION = process.env.CDN_REGION || "ap-south-1";
-const CDN_BUCKET_NAME = process.env.CDN_BUCKET_NAME;
 const CDN_CODEBASE_BASE_PATH = process.env.CDN_CODEBASE_BASE_PATH || "coder-agent-output";
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || "52428800", 10); // 50MB
 const QWIKBUILD_PLATFORM_API_KEY = process.env.QWIKBUILD_PLATFORM_API_KEY;
 
-// Validate required environment variables
-function validateEnvVars() {
-  const required = {
-    VITE_API_BASE_URL,
-    VITE_APP_ID,
-    URL_SLUG,
-    CDN_ACCESS_KEY_ID,
-    CDN_SECRET_ACCESS_KEY,
-    CDN_BUCKET_NAME,
-  };
-  const missing = Object.entries(required)
-    .filter(([, v]) => !v)
-    .map(([k]) => k);
-
-  if (missing.length > 0) {
-    console.error("Error: Missing required environment variables:");
-    missing.forEach(v => console.error(`   - ${v}`));
-    process.exit(1);
-  }
+/**
+ * Create S3 client for CDN operations (shared across sync and notification)
+ */
+function createCdnS3Client() {
+  return new S3Client({
+    region: CDN_REGION,
+    credentials: {
+      accessKeyId: env.CDN_ACCESS_KEY_ID,
+      secretAccessKey: env.CDN_SECRET_ACCESS_KEY,
+    },
+  });
 }
 
 /**
@@ -200,7 +188,7 @@ function collectFiles(rootDir) {
   const sourceFiles = [];
   const distFiles = [];
   const warnings = [];
-  const basePath = `${CDN_CODEBASE_BASE_PATH}/${URL_SLUG}`;
+  const basePath = `${CDN_CODEBASE_BASE_PATH}/${env.URL_SLUG}`;
 
   function walk(dir) {
     let entries;
@@ -280,7 +268,7 @@ async function uploadFileWithRetry(s3Client, file, maxRetries = 3) {
       const contentType = getContentType(file.fullPath);
 
       await s3Client.send(new PutObjectCommand({
-        Bucket: CDN_BUCKET_NAME,
+        Bucket: env.CDN_BUCKET_NAME,
         Key: file.s3Key,
         Body: content,
         ContentType: contentType,
@@ -307,16 +295,10 @@ async function uploadFileWithRetry(s3Client, file, maxRetries = 3) {
  */
 async function syncToS3() {
   console.log("Syncing codebase to S3...");
-  console.log(`   Bucket: ${CDN_BUCKET_NAME}`);
-  console.log(`   Path: ${CDN_CODEBASE_BASE_PATH}/${URL_SLUG}/`);
+  console.log(`   Bucket: ${env.CDN_BUCKET_NAME}`);
+  console.log(`   Path: ${CDN_CODEBASE_BASE_PATH}/${env.URL_SLUG}/`);
 
-  const s3Client = new S3Client({
-    region: CDN_REGION,
-    credentials: {
-      accessKeyId: CDN_ACCESS_KEY_ID,
-      secretAccessKey: CDN_SECRET_ACCESS_KEY,
-    },
-  });
+  const s3Client = createCdnS3Client();
 
   // Collect files (mirrors Python's file organization walk)
   console.log("   Organizing files...");
@@ -372,7 +354,7 @@ async function syncToS3() {
   }
 
   const success = errors.length === 0;
-  const s3FolderUrl = `${CDN_CODEBASE_BASE_PATH}/${URL_SLUG}/`;
+  const s3FolderUrl = `${CDN_CODEBASE_BASE_PATH}/${env.URL_SLUG}/`;
 
   if (success) {
     console.log(`S3 sync completed successfully (${uploaded} files uploaded)`);
@@ -399,8 +381,8 @@ async function syncToS3() {
 async function checkFirstTimeBuild(s3Client) {
   try {
     const result = await s3Client.send(new ListObjectsV2Command({
-      Bucket: CDN_BUCKET_NAME,
-      Prefix: `${CDN_CODEBASE_BASE_PATH}/${URL_SLUG}/`,
+      Bucket: env.CDN_BUCKET_NAME,
+      Prefix: `${CDN_CODEBASE_BASE_PATH}/${env.URL_SLUG}/`,
       MaxKeys: 1,
     }));
     return !result.Contents || result.Contents.length === 0;
@@ -412,41 +394,25 @@ async function checkFirstTimeBuild(s3Client) {
 /**
  * Notify the QwikBuild platform that frontend deployment is complete.
  * Mirrors Python _send_code_gen_complete / inform_code_gen_complete.
- * Uses HTTP API call to the platform (equivalent to the SQS notification
- * used in the Python agent system).
  */
 async function notifyCompletion(syncResult) {
   console.log("Notifying platform of deployment completion...");
 
-  const s3Client = new S3Client({
-    region: CDN_REGION,
-    credentials: {
-      accessKeyId: CDN_ACCESS_KEY_ID,
-      secretAccessKey: CDN_SECRET_ACCESS_KEY,
-    },
-  });
-
+  const s3Client = createCdnS3Client();
   const firstTimeBuild = await checkFirstTimeBuild(s3Client);
-  const s3Path = syncResult.s3_folder_url || `${CDN_CODEBASE_BASE_PATH}/${URL_SLUG}/`;
+  const s3Path = syncResult.s3_folder_url || `${CDN_CODEBASE_BASE_PATH}/${env.URL_SLUG}/`;
 
   try {
-    const response = await fetch(
-      `${VITE_API_BASE_URL}/api/apps/v1/${VITE_APP_ID}/notify-frontend-deployed`,
+    const response = await platformApiCall(
+      "POST",
+      "notify-frontend-deployed",
       {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(QWIKBUILD_PLATFORM_API_KEY
-            ? { "Authorization": `Bearer ${QWIKBUILD_PLATFORM_API_KEY}` }
-            : {}),
-        },
-        body: JSON.stringify({
-          status: "SUCCESS",
-          result: s3Path,
-          first_time_build: firstTimeBuild,
-          url_slug: URL_SLUG,
-        }),
-      }
+        status: "SUCCESS",
+        result: s3Path,
+        first_time_build: firstTimeBuild,
+        url_slug: env.URL_SLUG,
+      },
+      { apiKey: QWIKBUILD_PLATFORM_API_KEY },
     );
 
     if (response.ok) {
@@ -475,8 +441,8 @@ async function notifyCompletion(syncResult) {
 async function deploy() {
   try {
     console.log("Starting frontend deployment...");
-    console.log(`   URL Slug: ${URL_SLUG}`);
-    console.log(`   S3 Bucket: ${CDN_BUCKET_NAME}`);
+    console.log(`   URL Slug: ${env.URL_SLUG}`);
+    console.log(`   S3 Bucket: ${env.CDN_BUCKET_NAME}`);
     console.log(`   S3 Base Path: ${CDN_CODEBASE_BASE_PATH}`);
     console.log("");
 
@@ -530,7 +496,7 @@ async function deploy() {
     console.log(`   Build: ${result.steps.build}`);
     console.log(`   S3 Sync: ${result.steps.sync}`);
     console.log(`   Notification: ${result.steps.notification}`);
-    console.log(`   S3 Path: ${CDN_CODEBASE_BASE_PATH}/${URL_SLUG}/`);
+    console.log(`   S3 Path: ${CDN_CODEBASE_BASE_PATH}/${env.URL_SLUG}/`);
 
   } catch (error) {
     console.error("Deployment failed:", error.message);
@@ -539,7 +505,6 @@ async function deploy() {
 }
 
 // Run
-validateEnvVars();
 deploy().catch(error => {
   console.error("Unhandled error:", error);
   process.exit(1);

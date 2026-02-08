@@ -3,45 +3,15 @@
 import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import dotenv from "dotenv";
+import { loadEnv, requireEnvVars, platformApiCall, ROOT_DIR } from "./lib/common.js";
 
-const ROOT_DIR = process.cwd();
+loadEnv();
 
-// Load .env from root directory (if it exists), but don't override existing env vars
-// This allows environment variables from shell/CI CD to take precedence
-const rootEnvPath = join(ROOT_DIR, ".env");
-if (existsSync(rootEnvPath)) {
-  dotenv.config({ path: rootEnvPath, override: false });
-}
+const env = requireEnvVars(["DENO_ORGANIZATION_ID", "DENO_TOKEN", "VITE_API_BASE_URL", "VITE_APP_ID"]);
 
-// Configuration - all from environment variables
+// Configuration - from environment variables
 const DENO_API_BASE_URL = process.env.DENO_API_BASE_URL || 'https://api.deno.com/v1';
-const ORGANIZATION_ID = process.env.DENO_ORGANIZATION_ID;
-const DENO_TOKEN = process.env.DENO_TOKEN;
-const VITE_API_BASE_URL = process.env.VITE_API_BASE_URL;
-const VITE_APP_ID = process.env.VITE_APP_ID;
 const ENTRY_POINT = process.env.DENO_ENTRY_POINT || 'src/main.ts';
-
-// Validate required environment variables
-if (!ORGANIZATION_ID) {
-  console.error("Error: DENO_ORGANIZATION_ID environment variable is required");
-  process.exit(1);
-}
-
-if (!DENO_TOKEN) {
-  console.error("Error: DENO_TOKEN environment variable is required");
-  process.exit(1);
-}
-
-if (!VITE_API_BASE_URL) {
-  console.error("Error: VITE_API_BASE_URL environment variable is required");
-  process.exit(1);
-}
-
-if (!VITE_APP_ID) {
-  console.error("Error: VITE_APP_ID environment variable is required");
-  process.exit(1);
-}
-
 
 /**
  * Make authenticated request to Deno API
@@ -52,7 +22,7 @@ async function makeDenoRequest(endpoint, options = {}) {
   const response = await fetch(url, {
     ...options,
     headers: {
-      'Authorization': `Bearer ${DENO_TOKEN}`,
+      'Authorization': `Bearer ${env.DENO_TOKEN}`,
       'Content-Type': 'application/json',
       ...options.headers,
     },
@@ -73,9 +43,7 @@ async function createProject() {
   console.log("Creating new project...");
 
   try {
-    const response = await fetch(`${VITE_API_BASE_URL}/api/apps/v1/${VITE_APP_ID}/get-server-project`, {
-      method: "GET",
-    });
+    const response = await platformApiCall("GET", "get-server-project");
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -119,7 +87,7 @@ function readDirectoryRecursively(dir, baseDir = dir, prefix = "", assets = {}, 
         readDirectoryRecursively(fullPath, baseDir, prefix, assets, excludeDirs);
       }
     } else {
-      const assetPath = prefix ? join(prefix, relativePath) : relativePath;
+      const assetPath = (prefix ? join(prefix, relativePath) : relativePath).replace(/\\/g, "/");
       const content = readFileSync(fullPath, "utf-8");
       assets[assetPath] = {
         kind: "file",
@@ -245,10 +213,10 @@ async function createDeployment(projectId, deploymentAssets) {
     // Build environment variables object from process.env
     const envVars = {
       NODE_ENV: process.env.NODE_ENV || 'production',
-      APP_ID: VITE_APP_ID,
-      API_BASE_URL: VITE_API_BASE_URL,
-      VITE_APP_ID: VITE_APP_ID,
-      VITE_API_BASE_URL: VITE_API_BASE_URL,
+      APP_ID: env.VITE_APP_ID,
+      API_BASE_URL: env.VITE_API_BASE_URL,
+      VITE_APP_ID: env.VITE_APP_ID,
+      VITE_API_BASE_URL: env.VITE_API_BASE_URL,
       DATABASE_URL: process.env.DATABASE_URL,
       APP_S3_BUCKET_NAME: process.env.APP_S3_BUCKET_NAME,
       APP_S3_ENDPOINT: process.env.APP_S3_ENDPOINT,
@@ -339,7 +307,7 @@ async function waitForDeployment(projectId, deploymentId) {
 async function deploy() {
   try {
     console.log("Starting Deno deployment process...");
-    console.log(`   Organization ID: ${ORGANIZATION_ID}`);
+    console.log(`   Organization ID: ${env.DENO_ORGANIZATION_ID}`);
     console.log("");
 
     // Step 1: Create project
@@ -365,29 +333,20 @@ async function deploy() {
     console.log("");
     console.log("You can now access your server function at the deployment URL.");
 
-    await fetch(`${VITE_API_BASE_URL}/api/apps/v1/${VITE_APP_ID}/set-server-url`, {
-      method: "POST",
-      body: JSON.stringify({
-        url: deploymentUrl,
-      }),
-    });
+    const setUrlResponse = await platformApiCall("POST", "set-server-url", { url: deploymentUrl });
+    if (!setUrlResponse.ok) {
+      throw new Error(`Failed to set server URL (${setUrlResponse.status}): ${await setUrlResponse.text()}`);
+    }
   } catch (error) {
     console.error("Deployment Status Unknown - May be Deno deployment is throttled. Error Message from Deno:", error.message);
     process.exit(1);
   }
 }
 
-// Run the deployment if this script is executed directly
-const isMainModule = process.argv[1] && (
-  process.argv[1].includes('deploy-server.js') ||
-  process.argv[1].includes('qb-deploy-server')
-);
-
-if (isMainModule) {
-  deploy().catch(error => {
-    console.error("Unhandled error:", error);
-    process.exit(1);
-  });
-}
+// Run the deployment
+deploy().catch(error => {
+  console.error("Unhandled error:", error);
+  process.exit(1);
+});
 
 export { deploy, createProject, createDeployment, prepareDeploymentAssets };

@@ -6,27 +6,11 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import dotenv from "dotenv";
+import { loadEnv, requireEnvVars, platformApiCall, ROOT_DIR } from "./lib/common.js";
 
-const ROOT_DIR = process.cwd();
+loadEnv();
 
-// Load .env from root directory (if it exists), but don't override existing env vars
-// This allows environment variables from shell/CI CD to take precedence
-const rootEnvPath = join(ROOT_DIR, ".env");
-if (existsSync(rootEnvPath)) {
-  dotenv.config({ path: rootEnvPath, override: false });
-}
-
-// Configuration
-const API_BASE_URL = process.env.VITE_API_BASE_URL;
-const APP_ID = process.env.VITE_APP_ID;
-const QWIKBUILD_PLATFORM_API_KEY = process.env.QWIKBUILD_PLATFORM_API_KEY;
-
-if (!APP_ID || !API_BASE_URL || !QWIKBUILD_PLATFORM_API_KEY) {
-  console.error("Error: App ID, API Base URL, and QWIKBUILD_PLATFORM_API_KEY are required");
-  console.log("Example: npx qb-deploy-cron-and-comms");
-  process.exit(1);
-}
+const env = requireEnvVars(["VITE_API_BASE_URL", "VITE_APP_ID", "QWIKBUILD_PLATFORM_API_KEY"]);
 
 // Dynamically import CONFIG from the project's backend config
 let CONFIG;
@@ -50,7 +34,6 @@ try {
 
 async function sendCronConfig() {
   try {
-    // Load the config
     const config = CONFIG;
 
     if (!config.cron || !Array.isArray(config.cron)) {
@@ -62,26 +45,15 @@ async function sendCronConfig() {
       console.log(`  ${index + 1}. ${job.name} - ${job.schedule}`);
     });
 
-    // Only deploy if there are cron jobs to create
     if (config.cron.length === 0) {
       console.log("No cron jobs to deploy. Skipping deployment.");
       return;
     }
 
-    // Prepare the API request
-    const apiUrl = `${API_BASE_URL}/api/apps/v1/${APP_ID}/cron/create`;
-    const requestBody = config.cron;
+    console.log(`Sending cron config to platform...`);
 
-    console.log(`Sending request to: ${apiUrl}`);
-
-    // Send the request
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${QWIKBUILD_PLATFORM_API_KEY}`,
-      },
-      body: JSON.stringify(requestBody),
+    const response = await platformApiCall("POST", "cron/create", config.cron, {
+      apiKey: env.QWIKBUILD_PLATFORM_API_KEY,
     });
 
     // Check if response is JSON
@@ -129,7 +101,6 @@ async function sendCronConfig() {
 
 async function sendTemplatesForApproval() {
   try {
-    // Read the config file
     const config = CONFIG;
 
     if (
@@ -139,7 +110,6 @@ async function sendTemplatesForApproval() {
       throw new Error('Config file must contain a "communication_templates" array');
     }
 
-    // Only proceed if there are templates to register
     if (config.communication_templates.length === 0) {
       console.log("\nNo templates found to submit for approval. Skipping.");
       return;
@@ -153,20 +123,10 @@ async function sendTemplatesForApproval() {
       console.log(`  ${index + 1}. ${name}`);
     });
 
-    // Prepare the API request
-    const requestBody = config.communication_templates;
+    console.log(`Sending templates to platform...`);
 
-    const apiUrl = `${API_BASE_URL}/api/apps/v1/${APP_ID}/request-template-approval`;
-    console.log(`Sending request to: ${apiUrl}`);
-
-    // Send the request
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${QWIKBUILD_PLATFORM_API_KEY}`,
-      },
-      body: JSON.stringify(requestBody),
+    const response = await platformApiCall("POST", "request-template-approval", config.communication_templates, {
+      apiKey: env.QWIKBUILD_PLATFORM_API_KEY,
     });
 
     let responseData;
@@ -219,7 +179,6 @@ async function deployAll() {
   let hasFailure = false;
 
   try {
-    // Deploy cron jobs first
     await sendCronConfig();
     console.log("Cron deployment completed successfully!");
   } catch (error) {
@@ -228,7 +187,6 @@ async function deployAll() {
   }
 
   try {
-    // Then deploy communication templates
     await sendTemplatesForApproval();
     console.log("Communication template deployment completed successfully!");
   } catch (error) {
