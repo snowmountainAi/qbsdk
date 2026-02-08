@@ -289,12 +289,6 @@ async function waitForDeployment(projectId, deploymentId) {
 
       console.log(`   Attempt ${attempt}/${maxAttempts}: Status is ${deployment.status}, waiting...`);
       await new Promise(resolve => setTimeout(resolve, waitInterval));
-    } catch (error) {
-      if (attempt === maxAttempts) {
-        throw error;
-      }
-      console.log(`   Attempt ${attempt}/${maxAttempts}: ${error.message}, retrying...`);
-      await new Promise(resolve => setTimeout(resolve, waitInterval));
     }
   }
 
