@@ -81,10 +81,11 @@ async function sendCronConfig() {
     }
 
     // Display results
-    console.log("Success! Cron schedules created:");
+    console.log("Cron schedules response:");
     console.log(`   Overall success: ${responseData.success}`);
     console.log(`   Message: ${responseData.message}`);
 
+    let hasCronFailures = false;
     if (responseData.results) {
       console.log("Individual results:");
       responseData.results.forEach((result, index) => {
@@ -97,7 +98,22 @@ async function sendCronConfig() {
         if (result.ruleArn) {
           console.log(`      ARN: ${result.ruleArn}`);
         }
+        if (!result.success) {
+          hasCronFailures = true;
+          // Detect schedule format errors and provide actionable guidance
+          if (result.error && result.error.includes("Invalid Schedule Expression")) {
+            console.log(`      FIX: The schedule must use AWS EventBridge 6-field cron format.`);
+            console.log(`           Format: minutes hours day-of-month month day-of-week year`);
+            console.log(`           Example: "0 2 * * ? *" (daily at 2 AM UTC)`);
+            console.log(`           Common mistake: using 5-field Unix cron (e.g., "0 2 * * *") instead of 6-field AWS cron.`);
+            console.log(`           Use the scheduled_tasks_integration skill for correct format reference.`);
+          }
+        }
       });
+    }
+
+    if (hasCronFailures) {
+      throw new Error("Some cron jobs failed to deploy. See errors above.");
     }
   } catch (error) {
     console.error("Error deploying cron jobs:", error.message);
@@ -152,10 +168,11 @@ async function sendTemplatesForApproval() {
     }
 
     // Display results
-    console.log("Success! Templates submitted for approval:");
+    console.log("Template submission response:");
     console.log(`   Overall success: ${responseData.success}`);
     console.log(`   Message: ${responseData.message}`);
 
+    let hasTemplateFailures = false;
     if (responseData.results) {
       console.log("Individual results:");
       responseData.results.forEach((result, index) => {
@@ -170,7 +187,20 @@ async function sendTemplatesForApproval() {
         if (result.id) {
           console.log(`      ID: ${result.id}`);
         }
+        if (!result.success) {
+          hasTemplateFailures = true;
+          console.log(`      FIX: Check Twilio template rules — common issues:`);
+          console.log(`           - Body must START and END with text (not variables)`);
+          console.log(`           - Variables cannot be adjacent (need words between them)`);
+          console.log(`           - Need at least (2x+1) non-variable words for x variables`);
+          console.log(`           - No URL shorteners, no all-caps, no HTML/Markdown`);
+          console.log(`           Use the comms_integration skill for full Twilio template guidelines.`);
+        }
       });
+    }
+
+    if (hasTemplateFailures) {
+      throw new Error("Some templates failed to deploy. See errors above.");
     }
   } catch (error) {
     console.error("Error deploying communication templates:", error.message);

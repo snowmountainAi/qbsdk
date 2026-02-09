@@ -207,7 +207,7 @@ async function uploadToBackend(archivePath) {
   const mode = includeSource ? "full" : "dist";
   const url = `${env.AGENTQ_API_URL}/projects/${env.URL_SLUG}/deploy-frontend?mode=${mode}`;
   console.log(`Uploading archive to backend...`);
-  console.log(`   URL: ${url}`);
+  // console.log(`   URL: ${url}`);
   console.log(`   Mode: ${mode}`);
 
   try {
@@ -225,12 +225,14 @@ async function uploadToBackend(archivePath) {
       body: formData,
     });
 
+    // Read body as text first, then try to parse as JSON
+    // (avoids "Body has already been read" error when response is non-JSON)
+    const responseText = await response.text();
     let responseData;
     try {
-      responseData = await response.json();
+      responseData = JSON.parse(responseText);
     } catch {
-      const text = await response.text();
-      return { success: false, error: `Server returned non-JSON response (${response.status}): ${text}` };
+      return { success: false, error: `Server returned non-JSON response (${response.status}): ${responseText.slice(0, 500)}` };
     }
 
     if (!response.ok) {
@@ -285,7 +287,8 @@ async function deploy() {
     // Summary
     console.log("Frontend deployment completed!");
     if (uploadResult.data) {
-      console.log(`   S3 Path: ${uploadResult.data.s3_path || "N/A"}`);
+      const envPrefix = env.AGENTQ_API_URL.replace('https://consoleq.','').replace('qwikbuild.com/api','');
+      console.log(`   Deployment URL: https://${env.URL_SLUG}.${envPrefix}qwikbuild.site`);
       console.log(`   Source files: ${uploadResult.data.source_uploaded || "N/A"}`);
       console.log(`   Dist files: ${uploadResult.data.dist_uploaded || "N/A"}`);
       console.log(`   Notification: ${uploadResult.data.notification_sent ? "sent" : "failed"}`);
