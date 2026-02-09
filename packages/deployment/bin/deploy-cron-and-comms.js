@@ -11,6 +11,12 @@ import { loadEnv, requireEnvVars, platformApiCall, ROOT_DIR } from "./lib/common
 loadEnv();
 
 const env = requireEnvVars(["VITE_API_BASE_URL", "VITE_APP_ID", "QWIKBUILD_PLATFORM_API_KEY"]);
+// Indicators for agents
+
+console.log("==========================")
+console.log("Deploying Cron Jobs and Communication templates to Qwikbuild")
+console.log("==========================")
+
 
 // Dynamically import CONFIG from the project's backend config
 let CONFIG;
