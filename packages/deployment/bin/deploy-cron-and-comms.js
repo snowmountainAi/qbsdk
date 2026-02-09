@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Deploy cron jobs and communication templates from backend/src/cron_n_comm_config.js
+// Deploy cron jobs and communication templates from backend/src/cron_n_comm_config.ts
 // Usage: npx qb-deploy-cron-and-comms
 // Requires: VITE_API_BASE_URL, VITE_APP_ID, QWIKBUILD_PLATFORM_API_KEY as environment variables
 
@@ -14,10 +14,10 @@ const env = requireEnvVars(["VITE_API_BASE_URL", "VITE_APP_ID", "QWIKBUILD_PLATF
 
 // Dynamically import CONFIG from the project's backend config
 let CONFIG;
-const configPath = join(ROOT_DIR, "backend", "src", "cron_n_comm_config.js");
+const configPath = join(ROOT_DIR, "backend", "src", "cron_n_comm_config.ts");
 if (!existsSync(configPath)) {
   console.error(`Error: Config file not found at: ${configPath}`);
-  console.error("Expected file: backend/src/cron_n_comm_config.js");
+  console.error("Expected file: backend/src/cron_n_comm_config.ts");
   process.exit(1);
 }
 

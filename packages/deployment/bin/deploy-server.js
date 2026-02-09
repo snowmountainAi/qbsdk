@@ -40,9 +40,10 @@ async function makeDenoRequest(endpoint, options = {}) {
  * Create a new project in Deno
  */
 async function createProject() {
-  console.log("Creating new project...");
+  console.log("Getting Server Deployment Project...");
 
   try {
+    // This api creates new deno project if it doesnt exists. Once create the project cannot be changes
     const response = await platformApiCall("GET", "get-server-project");
 
     if (!response.ok) {
