@@ -254,8 +254,7 @@ async function deploy() {
 
   try {
     console.log("Starting frontend deployment...");
-    console.log(`   URL Slug: ${env.URL_SLUG}`);
-    console.log(`   Backend: ${env.AGENTQ_API_URL}`);
+    console.log(`   Deployment URL Slug: ${env.URL_SLUG}`);
     console.log(`   Mode: ${includeSource ? "full (source + dist)" : "dist only"}`);
     console.log("");
 
@@ -291,7 +290,7 @@ async function deploy() {
       console.log(`   Deployment URL: https://${env.URL_SLUG}.${envPrefix}qwikbuild.site`);
       console.log(`   Source files: ${uploadResult.data.source_uploaded || "N/A"}`);
       console.log(`   Dist files: ${uploadResult.data.dist_uploaded || "N/A"}`);
-      console.log(`   Notification: ${uploadResult.data.notification_sent ? "sent" : "failed"}`);
+      console.log(`   Deployment Job Started: ${uploadResult.data.notification_sent ? "Success" : "failed"}`);
     }
 
   } catch (error) {
