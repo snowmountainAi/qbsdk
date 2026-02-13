@@ -55,7 +55,7 @@ async function buildFrontend() {
   const scripts = packageJson.scripts || {};
 
   // Find build script (priority order)
-  const buildScriptPriority = ["frontend:build", "build:prod", "build:production"];
+  const buildScriptPriority = ["frontend:build", "build", "build:frontend", "build:prod", "build:production"];
   let buildScript = null;
   for (const name of buildScriptPriority) {
     if (scripts[name]) {
