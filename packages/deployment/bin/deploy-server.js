@@ -302,8 +302,6 @@ async function waitForDeployment(projectId, deploymentId) {
 async function deploy() {
   try {
     console.log("Starting Deno deployment process...");
-    console.log(`   Organization ID: ${env.DENO_ORGANIZATION_ID}`);
-    console.log("");
 
     // Step 1: Create project
     const project = await createProject();
