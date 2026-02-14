@@ -56,6 +56,13 @@ async function runDrizzlePull() {
     proc.stdout?.on("data", (data) => process.stdout.write(data));
     proc.stderr?.on("data", (data) => process.stderr.write(data));
 
+    // Suppress EPIPE errors on stdin — these occur when drizzle-kit closes
+    // its stdin before we stop writing auto-confirm "y\n" below.
+    proc.stdin?.on("error", (err) => {
+      if (err.code === "EPIPE") return; // Expected when child closes stdin
+      console.error(`stdin error: ${err.message}`);
+    });
+
     // Auto-confirm any prompts by sending 'y' repeatedly
     const confirmInterval = setInterval(() => {
       if (proc.stdin?.writable) {
