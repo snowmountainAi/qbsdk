@@ -1,6 +1,6 @@
 {
   "name": "@qwikbuild/qbsdk-db-tools",
-  "version": "-h",
+  "version": "1.0.1",
   "description": "Database migration and seeding tools for QwikBuild projects",
   "type": "module",
   "bin": {
