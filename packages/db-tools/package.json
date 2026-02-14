@@ -1,42 +1,42 @@
-﻿{
-    "name":  "@qwikbuild/qbsdk-db-tools",
-    "version":  "1.0.0",
-    "description":  "Database migration and seeding tools for QwikBuild projects",
-    "type":  "module",
-    "bin":  {
-                "qb-db-migrate":  "./bin/db-migrate.js",
-                "qb-db-seed":  "./bin/db-seed.js",
-                "qb-db-pull":  "./bin/db-pull.js"
-            },
-    "scripts":  {
-                    "test":  "echo \u0027No tests yet\u0027"
-                },
-    "dependencies":  {
-                         "dotenv":  "^17.2.2",
-                         "drizzle-orm":  "^0.45.1",
-                         "drizzle-kit":  "https://github.com/IamVNIE/drizzle-orm/releases/download/0.31.8-custom.2/drizzle-kit-0.31.8-custom.2.tgz"
-                     },
-    "engines":  {
-                    "node":  "\u003e=18.0.0"
-                },
-    "files":  [
-                  "bin"
-              ],
-    "repository":  {
-                       "type":  "git",
-                       "url":  "git+https://github.com/snowmountainAi/qbsdk.git",
-                       "directory":  "packages/db-tools"
-                   },
-    "homepage":  "https://github.com/snowmountainAi/qbsdk/tree/main/packages/db-tools",
-    "bugs":  {
-                 "url":  "https://github.com/snowmountainAi/qbsdk/issues"
-             },
-    "keywords":  [
-                     "database",
-                     "migration",
-                     "postgres",
-                     "drizzle",
-                     "qwikbuild"
-                 ],
-    "license":  "Apache-2.0"
+{
+  "name": "@qwikbuild/qbsdk-db-tools",
+  "version": "1.0.0",
+  "description": "Database migration and seeding tools for QwikBuild projects",
+  "type": "module",
+  "bin": {
+    "qb-db-migrate": "./bin/db-migrate.js",
+    "qb-db-seed": "./bin/db-seed.js",
+    "qb-db-pull": "./bin/db-pull.js"
+  },
+  "scripts": {
+    "test": "echo 'No tests yet'"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.2",
+    "drizzle-orm": "^0.45.1",
+    "drizzle-kit": "https://github.com/IamVNIE/drizzle-orm/releases/download/0.31.8-custom.2/drizzle-kit-0.31.8-custom.2.tgz"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "bin"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/snowmountainAi/qbsdk.git",
+    "directory": "packages/db-tools"
+  },
+  "homepage": "https://github.com/snowmountainAi/qbsdk/tree/main/packages/db-tools",
+  "bugs": {
+    "url": "https://github.com/snowmountainAi/qbsdk/issues"
+  },
+  "keywords": [
+    "database",
+    "migration",
+    "postgres",
+    "drizzle",
+    "qwikbuild"
+  ],
+  "license": "Apache-2.0"
 }
