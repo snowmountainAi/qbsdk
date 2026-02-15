@@ -219,6 +219,7 @@ async function createDeployment(projectId, deploymentAssets) {
       APP_ID: env.VITE_APP_ID,
       API_BASE_URL: env.VITE_API_BASE_URL,
       VITE_APP_ID: env.VITE_APP_ID,
+      QWIKBUILD_PLATFORM_URL: env.VITE_API_BASE_URL,
       VITE_API_BASE_URL: env.VITE_API_BASE_URL,
       DATABASE_URL: process.env.DATABASE_URL,
       APP_S3_BUCKET_NAME: process.env.APP_S3_BUCKET_NAME,
