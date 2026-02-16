@@ -10,6 +10,11 @@ import { join, resolve } from "path";
 import { spawn } from "child_process";
 import dotenv from "dotenv";
 
+// Suppress EPIPE errors on stdout/stderr — these occur in sandboxed
+// environments (E2B) when the parent closes the pipe before we finish writing.
+process.stdout?.on("error", (err) => { if (err.code !== "EPIPE") throw err; });
+process.stderr?.on("error", (err) => { if (err.code !== "EPIPE") throw err; });
+
 console.log("Database Migration Runner (Database-First Approach)");
 console.log("====================================================\n");
 
