@@ -55,7 +55,7 @@ async function buildFrontend() {
   const scripts = packageJson.scripts || {};
 
   // Find build script (priority order)
-  const buildScriptPriority = ["frontend:build", "build:prod", "build:production"];
+  const buildScriptPriority = ["frontend:build", "build", "build:frontend", "build:prod", "build:production"];
   let buildScript = null;
   for (const name of buildScriptPriority) {
     if (scripts[name]) {
@@ -286,7 +286,7 @@ async function deploy() {
     // Summary
     console.log("Frontend deployment completed!");
     if (uploadResult.data) {
-      const envPrefix = env.AGENTQ_API_URL.replace('https://consoleq.','').replace('qwikbuild.com/api','');
+      const envPrefix = env.AGENTQ_API_URL.replace('https://consoleq.','').replace('https://console.','').replace('qwikbuild.com/api','');
       console.log(`   Deployment URL: https://${env.URL_SLUG}.${envPrefix}qwikbuild.site`);
       console.log(`   Source files: ${uploadResult.data.source_uploaded || "N/A"}`);
       console.log(`   Dist files: ${uploadResult.data.dist_uploaded || "N/A"}`);

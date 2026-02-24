@@ -12,6 +12,8 @@ const env = requireEnvVars(["DENO_ORGANIZATION_ID", "DENO_TOKEN", "VITE_API_BASE
 // Configuration - from environment variables
 const DENO_API_BASE_URL = process.env.DENO_API_BASE_URL || 'https://api.deno.com/v1';
 const ENTRY_POINT = process.env.DENO_ENTRY_POINT || 'src/main.ts';
+const VITE_APP_BASE_URL = process.env.VITE_APP_BASE_URL;
+const VITE_APP_ID = process.env.VITE_APP_ID;
 
 /**
  * Make authenticated request to Deno API
@@ -214,9 +216,11 @@ async function createDeployment(projectId, deploymentAssets) {
     // Build environment variables object from process.env
     const envVars = {
       NODE_ENV: process.env.NODE_ENV || 'production',
+      VITE_APP_SLUG: env.URL_SLUG,
       APP_ID: env.VITE_APP_ID,
       API_BASE_URL: env.VITE_API_BASE_URL,
       VITE_APP_ID: env.VITE_APP_ID,
+      QWIKBUILD_PLATFORM_URL: env.VITE_API_BASE_URL,
       VITE_API_BASE_URL: env.VITE_API_BASE_URL,
       DATABASE_URL: process.env.DATABASE_URL,
       APP_S3_BUCKET_NAME: process.env.APP_S3_BUCKET_NAME,
@@ -300,8 +304,6 @@ async function waitForDeployment(projectId, deploymentId) {
 async function deploy() {
   try {
     console.log("Starting Deno deployment process...");
-    console.log(`   Organization ID: ${env.DENO_ORGANIZATION_ID}`);
-    console.log("");
 
     // Step 1: Create project
     const project = await createProject();
@@ -319,13 +321,12 @@ async function deploy() {
     const finalDeployment = await waitForDeployment(project.id, deployment.id);
     console.log("");
 
+    const deployedPlatformUrl = `${VITE_APP_BASE_URL}/api/apps/${VITE_APP_ID}/server/`;
     console.log("Deployment completed successfully!");
-    console.log(`   Project: ${project.name} (${project.id})`);
-    const deploymentUrl = `https://${project.name}-${finalDeployment.id}.deno.dev`;
-    console.log(`   Deployment URL: ${deploymentUrl}`);
-    console.log("");
+    console.log("Deployment URL: ", deployedPlatformUrl);
     console.log("You can now access your server function at the deployment URL.");
 
+    const deploymentUrl = `https://${project.name}-${finalDeployment.id}.deno.dev`;
     const setUrlResponse = await platformApiCall("POST", "set-server-url", { url: deploymentUrl });
     if (!setUrlResponse.ok) {
       throw new Error(`Failed to set server URL (${setUrlResponse.status}): ${await setUrlResponse.text()}`);
