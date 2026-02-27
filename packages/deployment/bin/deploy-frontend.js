@@ -20,7 +20,6 @@ loadEnv();
 
 const env = requireEnvVars([
   "AGENTQ_API_URL",
-  "URL_SLUG",
   "QWIKBUILD_PLATFORM_API_KEY",
 ]);
 
@@ -205,7 +204,7 @@ async function createArchive() {
  */
 async function uploadToBackend(archivePath) {
   const mode = includeSource ? "full" : "dist";
-  const url = `${env.AGENTQ_API_URL}/projects/${env.URL_SLUG}/deploy-frontend?mode=${mode}`;
+  const url = `${env.AGENTQ_API_URL}/projects/${process.env.URL_SLUG}/deploy-frontend?mode=${mode}`;
   console.log(`Uploading archive to backend...`);
   // console.log(`   URL: ${url}`);
   console.log(`   Mode: ${mode}`);
@@ -254,7 +253,7 @@ async function deploy() {
 
   try {
     console.log("Starting frontend deployment...");
-    console.log(`   Deployment URL Slug: ${env.URL_SLUG}`);
+    console.log(`   Deployment URL Slug: ${process.env.URL_SLUG}`);
     console.log(`   Mode: ${includeSource ? "full (source + dist)" : "dist only"}`);
     console.log("");
 
@@ -287,7 +286,7 @@ async function deploy() {
     console.log("Frontend deployment completed!");
     if (uploadResult.data) {
       const envPrefix = env.AGENTQ_API_URL.replace('https://consoleq.','').replace('https://console.','').replace('qwikbuild.com/api','');
-      console.log(`   Deployment URL: https://${env.URL_SLUG}.${envPrefix}qwikbuild.site`);
+      console.log(`   Deployment URL: https://${process.env.URL_SLUG}.${envPrefix}qwikbuild.site`);
       console.log(`   Source files: ${uploadResult.data.source_uploaded || "N/A"}`);
       console.log(`   Dist files: ${uploadResult.data.dist_uploaded || "N/A"}`);
       console.log(`   Deployment Job Started: ${uploadResult.data.notification_sent ? "Success" : "failed"}`);

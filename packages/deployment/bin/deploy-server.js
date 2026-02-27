@@ -216,6 +216,8 @@ async function createDeployment(projectId, deploymentAssets) {
     // Build environment variables object from process.env
     const envVars = {
       NODE_ENV: process.env.NODE_ENV || 'production',
+      VITE_APP_SLUG: process.env.URL_SLUG,
+      URL_SLUG: process.env.URL_SLUG,
       APP_ID: env.VITE_APP_ID,
       API_BASE_URL: env.VITE_API_BASE_URL,
       VITE_APP_ID: env.VITE_APP_ID,
@@ -226,8 +228,17 @@ async function createDeployment(projectId, deploymentAssets) {
       APP_S3_ENDPOINT: process.env.APP_S3_ENDPOINT,
       APP_S3_ACCESS_KEY_ID: process.env.APP_S3_ACCESS_KEY_ID,
       APP_S3_SECRET_ACCESS_KEY: process.env.APP_S3_SECRET_ACCESS_KEY,
-      APP_JWT_SECRET: process.env.APP_JWT_SECRET
+      APP_JWT_SECRET: process.env.APP_JWT_SECRET,
+      COMPOSIO_API_KEY: process.env.COMPOSIO_API_KEY,
     };
+
+    // Auto-include any env vars prefixed with APP_DENO
+    // so new Deno-bound vars can be added without modifying this script.
+    for (const [key, value] of Object.entries(process.env)) {
+      if (key.startsWith('APP_DENO') && !(key in envVars)) {
+        envVars[key] = value;
+      }
+    }
 
     // Remove undefined values
     Object.keys(envVars).forEach(key => {
