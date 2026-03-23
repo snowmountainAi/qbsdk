@@ -13,6 +13,7 @@
 
 import { readFileSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
 import { loadEnv, requireEnvVars, ROOT_DIR } from "./lib/common.js";
 
@@ -120,8 +121,10 @@ async function buildFrontend() {
  * @returns {Promise<{success: boolean, archivePath?: string, error?: string}>}
  */
 async function createArchive() {
+  // Write archive to /tmp to avoid "file changed as we read it" errors
+  // (tar detects the directory changed when the archive is written into it)
   const archiveName = "deploy-frontend.tar.gz";
-  const archivePath = join(ROOT_DIR, archiveName);
+  const archivePath = join(tmpdir(), archiveName);
 
   // Remove existing archive if present
   if (existsSync(archivePath)) {
@@ -134,7 +137,7 @@ async function createArchive() {
     console.log("Creating deployment archive (full: source + dist)...");
     console.log("   Excluding: node_modules (recursive), .git, .env, lock files");
     args = [
-      "-czf", archiveName,
+      "-czf", archivePath,
       "--exclude=./node_modules",
       "--exclude=*/node_modules",
       "--exclude=.git",
@@ -143,7 +146,6 @@ async function createArchive() {
       "--exclude=pnpm-lock.yaml",
       "--exclude=package-lock.json",
       "--exclude=yarn.lock",
-      `--exclude=${archiveName}`,
       ".",
     ];
   } else {
@@ -156,10 +158,10 @@ async function createArchive() {
 
     if (existsSync(distPath)) {
       console.log("   Found: dist/");
-      args = ["-czf", archiveName, "dist"];
+      args = ["-czf", archivePath, "dist"];
     } else if (existsSync(frontendDistPath)) {
       console.log("   Found: frontend/dist/");
-      args = ["-czf", archiveName, "-C", "frontend", "dist"];
+      args = ["-czf", archivePath, "-C", "frontend", "dist"];
     } else {
       console.error("   No dist/ directory found. Run the build first, or use --full to include source.");
       return { success: false, error: "No dist/ directory found" };
