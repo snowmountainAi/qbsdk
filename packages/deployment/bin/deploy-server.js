@@ -240,6 +240,12 @@ async function createDeployment(projectId, deploymentAssets) {
       }
     }
 
+    for (const [key, value] of Object.entries(process.env)) {
+      if (key.startsWith('USER_ADDED_KEY_') && !(key in envVars)) {
+        envVars[key] = value;
+      }
+    }
+
     // Remove undefined values
     Object.keys(envVars).forEach(key => {
       if (envVars[key] === undefined) {
