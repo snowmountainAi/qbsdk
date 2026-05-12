@@ -12,7 +12,8 @@
     "test": "echo 'No tests yet'"
   },
   "dependencies": {
-    "dotenv": "^17.2.2"
+    "dotenv": "^17.2.2",
+    "@deno/sandbox": "^0.13.2"
   },
   "engines": {
     "node": ">=18.0.0"
