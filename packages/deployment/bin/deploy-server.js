@@ -4,7 +4,9 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import dotenv from "dotenv";
 import { Client } from "@deno/sandbox";
-import { loadEnv, requireEnvVars, platformApiCall, ROOT_DIR } from "./common.js";
+
+
+import { loadEnv, requireEnvVars, platformApiCall, ROOT_DIR } from "./lib/common.js";
 
 loadEnv();
 
