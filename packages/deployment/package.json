@@ -1,6 +1,6 @@
 {
   "name": "@qwikbuild/qbsdk-deployment",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Deployment tools for QwikBuild projects - server, frontend, and cron/comms deployment",
   "type": "module",
   "bin": {
