@@ -30,6 +30,9 @@ const ALWAYS_SECRET_KEYS = new Set([
   "DATABASE_URL",
   "APP_S3_ACCESS_KEY_ID",
   "APP_S3_SECRET_ACCESS_KEY",
+  // Redis proxy URIs embed the per-app auth token in the URL, so treat as secret.
+  "REDIS_URL",
+  "REDIS_TLS_URL",
 ]);
 
 function isSecretEnvKey(key) {
@@ -215,6 +218,8 @@ function buildEnvVars() {
     APP_S3_SECRET_ACCESS_KEY: process.env.APP_S3_SECRET_ACCESS_KEY,
     APP_JWT_SECRET: process.env.APP_JWT_SECRET,
     COMPOSIO_API_KEY: process.env.COMPOSIO_API_KEY,
+    REDIS_URL: process.env.REDIS_URL,
+    REDIS_TLS_URL: process.env.REDIS_TLS_URL,
   };
 
   // Auto-include any APP_DENO* and USER_ADDED_KEY_* vars from the environment,
