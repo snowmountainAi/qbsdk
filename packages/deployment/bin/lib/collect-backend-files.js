@@ -1,7 +1,8 @@
 import { execFile } from "node:child_process";
-import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { cpSync, readFileSync, readdirSync, existsSync } from "node:fs";
 import { join, relative } from "node:path";
 import { promisify } from "node:util";
+import { ROOT_DIR } from "./common.js";
 import { resolveBackendRoot } from "./backend-path.js";
 
 const execFileAsync = promisify(execFile);
@@ -15,6 +16,7 @@ const ROOT_FILES = ["package.json", "package-lock.json", "vercel.json"];
  */
 export async function collectBackendFiles(backendRoot = resolveBackendRoot()) {
   const distDir = join(backendRoot, "dist");
+  copySharedIntoBackend(backendRoot);
   await buildBackend(backendRoot);
 
   const files = [];
@@ -61,6 +63,17 @@ function walkDirectory(absoluteDir, baseDir, deploymentPrefix) {
   }
 
   return files;
+}
+
+function copySharedIntoBackend(backendRoot) {
+  const sharedSource = join(ROOT_DIR, "shared");
+  if (!existsSync(sharedSource)) {
+    return;
+  }
+
+  const sharedTarget = join(backendRoot, "shared");
+  cpSync(sharedSource, sharedTarget, { recursive: true, force: true });
+  console.log("   Copied shared/ into backend/shared");
 }
 
 async function buildBackend(backendRoot) {
