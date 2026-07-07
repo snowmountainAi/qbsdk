@@ -156,12 +156,11 @@ function buildPlatformEnv() {
     APP_S3_SECRET_ACCESS_KEY: process.env.APP_S3_SECRET_ACCESS_KEY,
     APP_JWT_SECRET: process.env.APP_JWT_SECRET,
     COMPOSIO_API_KEY: process.env.COMPOSIO_API_KEY,
-    // Redis: REST facade (default transport on this stack — the token
-    // auto-encrypts via the secret-key pattern) plus the rediss:// TCP pair.
+    // Redis: REST facade only — the sole Redis transport on this stack (the
+    // token auto-encrypts via the secret-key pattern). The rediss:// TCP pair
+    // is deliberately NOT forwarded to v8 deployments.
     UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
-    REDIS_URL: process.env.REDIS_URL,
-    REDIS_TLS_URL: process.env.REDIS_TLS_URL,
   };
 
   for (const [key, value] of Object.entries(process.env)) {
