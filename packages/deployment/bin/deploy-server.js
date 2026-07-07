@@ -220,6 +220,11 @@ function buildEnvVars() {
     COMPOSIO_API_KEY: process.env.COMPOSIO_API_KEY,
     REDIS_URL: process.env.REDIS_URL,
     REDIS_TLS_URL: process.env.REDIS_TLS_URL,
+    // Upstash-compatible REST facade on the redis proxy — the default Redis
+    // transport for serverless. The token auto-marks secret via the /TOKEN/i
+    // pattern in isSecretEnvKey; the URL is plain platform config.
+    UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL,
+    UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
   };
 
   // Auto-include any APP_DENO* and USER_ADDED_KEY_* vars from the environment,
