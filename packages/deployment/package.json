@@ -1,6 +1,6 @@
 {
   "name": "@qwikbuild/qbsdk-deployment",
-  "version": "3.0.0-beta",
+  "version": "3.0.0-beta.1",
   "description": "Deployment tools for QwikBuild projects - server, frontend, and cron/comms deployment",
   "type": "module",
   "bin": {
@@ -12,8 +12,9 @@
     "test": "echo 'No tests yet'"
   },
   "dependencies": {
-    "dotenv": "^17.2.2",
-    "@deno/sandbox": "^0.13.2"
+    "@deno/sandbox": "^0.13.2",
+    "@vercel/sdk": "^1.28.6",
+    "dotenv": "^17.2.2"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -33,6 +34,7 @@
   "keywords": [
     "deployment",
     "deno",
+    "vercel",
     "s3",
     "frontend",
     "qwikbuild"

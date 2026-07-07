@@ -1,6 +1,6 @@
 # @qwikbuild/qbsdk-deployment
 
-Deployment tools for QwikBuild projects. Deploys Deno backend servers, frontend applications, and cron/communication templates.
+Deployment tools for QwikBuild projects. Deploys Vercel backend servers, frontend applications, and cron/communication templates.
 
 ## Installation
 
@@ -16,32 +16,38 @@ npm install https://github.com/snowmountainAi/qbsdk/releases/download/deployment
 
 ### qb-deploy-server
 
-Deploys the Deno backend server to Deno Deploy.
+Deploys the Hono backend to Vercel using the Vercel SDK (experimental backends / cervel).
 
 ```bash
 npx qb-deploy-server
 ```
 
 **What it does:**
-1. Fetches project details from the QwikBuild platform API
-2. Prepares deployment assets (backend/src, shared, deno.jsonc, deno.lock)
-3. Creates a deployment via Deno Deploy API with environment variables
-4. Polls until deployment is ready (terminates on first error)
-5. Registers the deployment URL with the platform
+1. Resolves the backend directory (`backend/` by default)
+2. Builds the backend with `cervel` and collects deployment files
+3. Syncs environment variables from `backend/.env` to the Vercel project
+4. Creates a production deployment via the Vercel API
+5. Polls until the deployment is ready
+6. Registers the deployment URL with the QwikBuild platform
+
+**Options:**
+- `-n, --name <name>` — deployment / project name (default: random UUID)
+- `-d, --domain <domain>` — custom domain to attach to the Vercel project
+- `-p, --project <id>` — existing Vercel project ID
+- `--skip-platform` — skip QwikBuild platform URL registration
 
 **Required environment variables:**
-- `DENO_ORGANIZATION_ID` - Deno Deploy organization ID
-- `DENO_TOKEN` - Deno Deploy API token
-- `VITE_API_BASE_URL` - QwikBuild platform API URL
-- `VITE_APP_ID` - Application ID
-- `DATABASE_URL` - PostgreSQL connection string
-- `APP_JWT_SECRET` - JWT secret for the backend
+- `VERCEL_TOKEN` — Vercel API token
+- `VITE_API_BASE_URL` — QwikBuild platform API URL
+- `VITE_APP_ID` — Application ID
+- `DATABASE_URL` — PostgreSQL connection string (in `backend/.env` or shell)
+- `APP_JWT_SECRET` — JWT secret for the backend
 
 **Optional environment variables:**
-- `DENO_ENTRY_POINT` - Entry point file (default: `src/main.ts`)
-- `DENO_DEPLOYMENT_MAX_ATTEMPTS` - Max poll attempts (default: `30`)
-- `DENO_DEPLOYMENT_WAIT_INTERVAL` - Poll interval in ms (default: `5000`)
-- `APP_S3_BUCKET_NAME`, `APP_S3_ENDPOINT`, `APP_S3_ACCESS_KEY_ID`, `APP_S3_SECRET_ACCESS_KEY` - S3/R2 storage config
+- `VERCEL_TEAM_ID` — Vercel team ID
+- `VERCEL_PROJECT_ID` / `DEPLOY_FILES_PROJECT_ID` — existing Vercel project ID
+- `BACKEND_DIR` — backend folder name (default: `backend`)
+- `VERCEL_DEPLOYMENT_NAME`, `VERCEL_DOMAIN` — defaults for CLI flags
 
 ### qb-deploy-frontend
 
@@ -95,7 +101,7 @@ npx qb-deploy-cron-and-comms
 
 - Node.js >= 18
 - Environment variables set (via `.env` file or shell)
-- For `qb-deploy-server`: Deno Deploy account and token
+- For `qb-deploy-server`: Vercel account and token; backend built with cervel (via `vercel` devDependency in the backend)
 - For `qb-deploy-frontend`: AgentQ backend URL and API key
 - For `qb-deploy-cron-and-comms`: `backend/src/cron_n_comm_config.ts` with exported `CONFIG`
 
@@ -104,13 +110,14 @@ npx qb-deploy-cron-and-comms
 ```
 project/
 ├── .env                           # Environment variables
-├── backend/
+├── backend/                       # Vercel/Hono backend (used by qb-deploy-server)
 │   ├── src/
-│   │   ├── main.ts                # Deno entry point
+│   │   ├── main.ts                # Hono entry point
 │   │   └── cron_n_comm_config.ts  # Cron/comms config
-│   ├── deno.jsonc
-│   ├── deno.lock
-│   └── drizzle.config.ts
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── vercel.json
+│   └── .env
 ├── frontend/
 │   └── ...                        # Frontend source
 ├── shared/                        # Shared code (deployed with server)
