@@ -35,18 +35,22 @@ export async function collectBackendFiles(backendRoot = resolveBackendRoot()) {
     files.push(readInlinedFile(absolutePath, name));
   }
 
-  files.push(readInlinedFile(join(distDir, ".cervel.json"), ".cervel.json"));
-  files.push(readInlinedFile(join(distDir, "rolldown_runtime.js"), "rolldown_runtime.js"));
-  files.push(...walkDirectory(join(distDir, "src"), join(distDir, "src"), "src"));
+  // Collect the ENTIRE built output (dist/), preserving each file's path
+  // relative to dist/. cervel's emitted layout varies by version — v0.1.29
+  // produces `.cervel.json`, `_virtual/rolldown_runtime.mjs`, and
+  // `src/**/*.mjs` where the src modules import the runtime by relative path
+  // (`../../_virtual/rolldown_runtime.mjs`). Cherry-picking known filenames
+  // (e.g. a root `rolldown_runtime.js`) breaks those imports and is brittle
+  // across cervel versions; uploading the tree verbatim keeps them resolvable.
+  if (!existsSync(distDir)) {
+    throw new Error(`Built backend output not found: ${distDir}`);
+  }
+  files.push(...walkDirectory(distDir, distDir, ""));
 
   return files;
 }
 
 function walkDirectory(absoluteDir, baseDir, deploymentPrefix) {
-  if (!existsSync(absoluteDir)) {
-    throw new Error(`Built backend output not found: ${absoluteDir}`);
-  }
-
   const files = [];
   const entries = readdirSync(absoluteDir, { withFileTypes: true });
 
@@ -59,7 +63,10 @@ function walkDirectory(absoluteDir, baseDir, deploymentPrefix) {
     }
 
     const relativePath = relative(baseDir, absolutePath).replace(/\\/g, "/");
-    files.push(readInlinedFile(absolutePath, `${deploymentPrefix}/${relativePath}`));
+    const deploymentPath = deploymentPrefix
+      ? `${deploymentPrefix}/${relativePath}`
+      : relativePath;
+    files.push(readInlinedFile(absolutePath, deploymentPath));
   }
 
   return files;
