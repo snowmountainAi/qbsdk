@@ -141,19 +141,24 @@ export async function deployBackendFiles(options = {}) {
 
   const targetProjectId = projectId ?? deployment.projectId;
 
-  if (!projectId) {
-    await vercel.projects.updateProject({
-      requestBody: { ssoProtection: null },
-      idOrName: deployment.projectId,
-      teamId,
-    });
-
-    await syncBackendEnvToProject(targetProjectId, { vercel, teamId, platformEnv });
-  }
+  // Disable Vercel deployment protection (SSO / "Vercel Authentication") so the
+  // app's public API is reachable without a Vercel login. Vercel turns this ON
+  // by default for new projects. This must run for BOTH a provided projectId
+  // (consoleq-provisioned) and an auto-created one — previously it only ran in
+  // the auto-create branch, so once get-server-project returned a real project
+  // id the deployments came up protected.
+  await vercel.projects.updateProject({
+    requestBody: { ssoProtection: null },
+    idOrName: targetProjectId,
+    teamId,
+  });
 
   let finalDeployment = deployment;
 
   if (!projectId) {
+    // The project was auto-created by the first deployment above; now that it
+    // exists, sync the runtime env and redeploy so the app boots with it.
+    await syncBackendEnvToProject(targetProjectId, { vercel, teamId, platformEnv });
     finalDeployment = await vercel.deployments.createDeployment({
       requestBody: {
         deploymentId: deployment.id,
