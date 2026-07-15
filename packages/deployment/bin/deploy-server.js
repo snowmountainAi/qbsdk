@@ -9,6 +9,7 @@ import { collectBackendFiles } from "./lib/collect-backend-files.js";
 import {
   buildDeployEnv,
   deployBackendFiles,
+  parseRegions,
   waitForDeploymentReady,
 } from "./lib/vercel-api.js";
 
@@ -17,6 +18,7 @@ function parseArgs(argv) {
     deploymentName: process.env.VERCEL_DEPLOYMENT_NAME,
     domain: process.env.VERCEL_DOMAIN,
     projectId: process.env.VERCEL_PROJECT_ID || process.env.DEPLOY_FILES_PROJECT_ID,
+    regions: process.env.VERCEL_REGIONS,
     skipPlatform: false,
     help: false,
   };
@@ -30,6 +32,8 @@ function parseArgs(argv) {
       options.domain = argv[++i];
     } else if (arg === "--project" || arg === "-p") {
       options.projectId = argv[++i];
+    } else if (arg === "--regions" || arg === "-r") {
+      options.regions = argv[++i];
     } else if (arg === "--skip-platform") {
       options.skipPlatform = true;
     } else if (arg === "--help" || arg === "-h") {
@@ -50,6 +54,7 @@ Options:
   -n, --name <name>       Deployment / project name (default: random UUID)
   -d, --domain <domain>   Custom domain to attach to the Vercel project
   -p, --project <id>      Existing Vercel project ID (skips auto-provision)
+  -r, --regions <list>    Comma-separated Function regions (default: sin1)
       --skip-platform     Do not register the deployment URL with QwikBuild
   -h, --help              Show this help message
 
@@ -58,6 +63,7 @@ Environment:
   VERCEL_TEAM_ID          Vercel team ID (optional)
   VERCEL_PROJECT_ID       Existing Vercel project ID (optional)
   DEPLOY_FILES_PROJECT_ID Alias for VERCEL_PROJECT_ID
+  VERCEL_REGIONS          Comma-separated Function regions (optional)
   BACKEND_DIR             Backend folder name (default: backend)
   VITE_API_BASE_URL       QwikBuild platform API URL (required)
   VITE_APP_ID             Application ID (required)
@@ -200,12 +206,13 @@ async function deploy() {
     console.log("");
 
     console.log("Creating Vercel deployment...");
-    const { deployment, projectId: targetProjectId, url } = await deployBackendFiles({
+    const { deployment, projectId: targetProjectId, url, regions } = await deployBackendFiles({
       files,
       deploymentName: cli.deploymentName,
       projectId,
       domain: cli.domain,
       platformEnv,
+      regions: parseRegions(cli.regions),
     });
 
     console.log(`   Deployment created: id=${deployment.id} state=${deployment.readyState}`);
@@ -213,6 +220,7 @@ async function deploy() {
       console.log(`   URL: ${url}`);
     }
     console.log(`   Project ID: ${targetProjectId}`);
+    console.log(`   Regions: ${regions.join(", ")}`);
     console.log("");
 
     console.log("Waiting for deployment to become ready...");

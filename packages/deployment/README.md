@@ -34,6 +34,7 @@ npx qb-deploy-server
 - `-n, --name <name>` — deployment / project name (default: random UUID)
 - `-d, --domain <domain>` — custom domain to attach to the Vercel project
 - `-p, --project <id>` — existing Vercel project ID
+- `-r, --regions <list>` — comma-separated Function regions (default: `sin1`)
 - `--skip-platform` — skip QwikBuild platform URL registration
 
 **Required environment variables:**
@@ -46,6 +47,7 @@ npx qb-deploy-server
 **Optional environment variables:**
 - `VERCEL_TEAM_ID` — Vercel team ID
 - `VERCEL_PROJECT_ID` / `DEPLOY_FILES_PROJECT_ID` — existing Vercel project ID
+- `VERCEL_REGIONS` — comma-separated Function regions (Pro: up to 3)
 - `BACKEND_DIR` — backend folder name (default: `backend`)
 - `VERCEL_DEPLOYMENT_NAME`, `VERCEL_DOMAIN` — defaults for CLI flags
 

@@ -17,6 +17,13 @@ const REQUIRED_PROJECT_ENV = {
   VERCEL_EXPERIMENTAL_BACKENDS: "1",
 };
 
+/**
+ * Default to a single Function region colocated with our Neon DBs in
+ * Singapore. Pro can use up to 3 regions; override with --regions /
+ * VERCEL_REGIONS, or set "regions" in vercel.json.
+ */
+export const DEFAULT_FUNCTION_REGIONS = ["sin1"];
+
 const backendProjectSettings = {
   framework: Framework.Hono,
   installCommand: "npm install",
@@ -24,6 +31,75 @@ const backendProjectSettings = {
 };
 
 const TERMINAL_READY_STATES = new Set(["READY", "ERROR", "CANCELED"]);
+
+/**
+ * Normalize a regions value from CLI, env, or vercel.json into a string[].
+ * @param {string | string[] | undefined | null} value
+ * @returns {string[] | undefined}
+ */
+export function parseRegions(value) {
+  if (value == null || value === "") {
+    return undefined;
+  }
+
+  const list = Array.isArray(value)
+    ? value
+    : String(value)
+        .split(/[,\s]+/)
+        .map((region) => region.trim())
+        .filter(Boolean);
+
+  return list.length > 0 ? list : undefined;
+}
+
+function readVercelJsonRegions(files = []) {
+  const entry = files.find((file) => file.file === "vercel.json");
+  if (!entry?.data) {
+    return undefined;
+  }
+
+  try {
+    return parseRegions(JSON.parse(entry.data).regions);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Ensure the deployment payload's vercel.json includes the resolved regions.
+ * @param {Array<{ file: string, data: string }>} files
+ * @param {string[]} regions
+ */
+function withRegionsInVercelJson(files, regions) {
+  const nextFiles = [...files];
+  const index = nextFiles.findIndex((file) => file.file === "vercel.json");
+  let config = { version: 2 };
+
+  if (index >= 0) {
+    try {
+      config = JSON.parse(nextFiles[index].data);
+    } catch {
+      config = { version: 2 };
+    }
+  }
+
+  const updated = {
+    ...config,
+    regions,
+  };
+  const entry = {
+    file: "vercel.json",
+    data: `${JSON.stringify(updated, null, 2)}\n`,
+  };
+
+  if (index >= 0) {
+    nextFiles[index] = entry;
+  } else {
+    nextFiles.unshift(entry);
+  }
+
+  return nextFiles;
+}
 
 function sanitizeProjectName(name) {
   return name
@@ -113,12 +189,18 @@ export async function deployBackendFiles(options = {}) {
     teamId = process.env.VERCEL_TEAM_ID,
     platformEnv = {},
     config = backendProjectSettings,
+    regions:
+      explicitRegions = parseRegions(process.env.VERCEL_REGIONS) ??
+      readVercelJsonRegions(files) ??
+      DEFAULT_FUNCTION_REGIONS,
   } = options;
 
   if (!files?.length) {
     throw new Error("No deployment files collected");
   }
 
+  const regions = parseRegions(explicitRegions) ?? DEFAULT_FUNCTION_REGIONS;
+  const deploymentFiles = withRegionsInVercelJson(files, regions);
   const sanitizedName = sanitizeProjectName(deploymentName);
 
   if (projectId) {
@@ -128,10 +210,11 @@ export async function deployBackendFiles(options = {}) {
   const deployment = await vercel.deployments.createDeployment({
     requestBody: {
       name: sanitizedName,
-      files,
+      files: deploymentFiles,
       project: projectId,
       projectSettings: config,
       target: "production",
+      regions,
     },
     skipAutoDetectionConfirmation: config
       ? SkipAutoDetectionConfirmation.Zero
@@ -165,6 +248,7 @@ export async function deployBackendFiles(options = {}) {
         name: sanitizedName,
         project: targetProjectId,
         target: "production",
+        regions,
       },
       teamId,
     });
@@ -182,6 +266,7 @@ export async function deployBackendFiles(options = {}) {
     deployment: finalDeployment,
     projectId: targetProjectId,
     url: finalDeployment.url ? `https://${finalDeployment.url}` : undefined,
+    regions,
   };
 }
 
