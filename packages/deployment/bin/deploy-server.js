@@ -2,6 +2,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 import dotenv from "dotenv";
 import { loadEnv, requireEnvVars, platformApiCall, ROOT_DIR } from "./lib/common.js";
 import { resolveBackendRoot } from "./lib/backend-path.js";
@@ -67,6 +68,8 @@ Environment:
   BACKEND_DIR             Backend folder name (default: backend)
   VITE_API_BASE_URL       QwikBuild platform API URL (required)
   VITE_APP_ID             Application ID (required)
+  DEPLOY_AUTH_SECRET      Per-app deploy-auth base secret for the authenticated
+                          v3 platform endpoints (required)
 `);
 }
 
@@ -83,6 +86,7 @@ const env = requireEnvVars([
   "VERCEL_TOKEN",
   "VITE_API_BASE_URL",
   "VITE_APP_ID",
+  "DEPLOY_AUTH_SECRET",
 ]);
 
 
@@ -90,9 +94,27 @@ const VITE_APP_BASE_URL = process.env.VITE_APP_BASE_URL;
 const VITE_APP_ID = env.VITE_APP_ID;
 
 /**
+ * Per-app deploy token for the authenticated v3 platform endpoints.
+ * Must equal sha256(appId + DEPLOY_AUTH_SECRET) — the platform recomputes and
+ * compares it in withDeployAuth. DEPLOY_AUTH_SECRET is distinct from the app's
+ * JWT/testing secret.
+ */
+function deployToken() {
+  return createHash("sha256")
+    .update(VITE_APP_ID + env.DEPLOY_AUTH_SECRET)
+    .digest("hex");
+}
+
+/** Options for the authenticated v3 platform calls. */
+function v3Auth() {
+  return { apiVersion: "v3", apiKey: deployToken() };
+}
+
+/**
  * Resolve the Vercel project ID from CLI/env or the QwikBuild platform.
- * Platform contract: get-server-project returns { id, slug } where id is the
- * Vercel project ID when the app is provisioned for Vercel.
+ * Platform contract (authenticated v3): GET /api/apps/v3/{appId}/get-server-project
+ * returns { id, name, url?, server_provider: "vercel" }, where `id` is the Vercel
+ * project ID (existing or freshly provisioned).
  */
 async function resolveProjectId(explicitProjectId) {
   if (explicitProjectId) {
@@ -102,7 +124,7 @@ async function resolveProjectId(explicitProjectId) {
 
   console.log("Fetching server project from QwikBuild platform...");
 
-  const response = await platformApiCall("GET", "get-server-project");
+  const response = await platformApiCall("GET", "get-server-project", undefined, v3Auth());
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(`Platform get-server-project failed (${response.status}): ${errorText}`);
@@ -249,7 +271,7 @@ async function deploy() {
     }
 
     if (!cli.skipPlatform) {
-      const setUrlResponse = await platformApiCall("POST", "set-server-url", { url: deploymentUrl });
+      const setUrlResponse = await platformApiCall("POST", "set-server-url", { url: deploymentUrl }, v3Auth());
       if (!setUrlResponse.ok) {
         throw new Error(
           `Failed to set server URL (${setUrlResponse.status}): ${await setUrlResponse.text()}`,

@@ -45,20 +45,22 @@ export function requireEnvVars(varNames) {
 
 /**
  * Make an API call to the QwikBuild platform.
- * URL: ${VITE_API_BASE_URL}/api/apps/v1/${VITE_APP_ID}/${path}
+ * URL: ${VITE_API_BASE_URL}/api/apps/${apiVersion}/${VITE_APP_ID}/${path}
  *
  * @param {string} method - HTTP method (GET, POST, etc.)
- * @param {string} path - Path after /api/apps/v1/{appId}/, e.g. "cron/create"
+ * @param {string} path - Path after /api/apps/{version}/{appId}/, e.g. "cron/create"
  * @param {object} [body] - JSON body (will be stringified)
  * @param {object} [options]
  * @param {string} [options.apiKey] - If provided, sent as Bearer token in Authorization header
+ * @param {string} [options.apiVersion] - API namespace segment, default "v1". Use "v3" for the authenticated Vercel deploy endpoints.
  * @returns {Promise<Response>} Raw fetch Response — caller handles status/parsing
  */
 export async function platformApiCall(method, path, body, options = {}) {
   const apiBaseUrl = process.env.VITE_API_BASE_URL;
   const appId = process.env.VITE_APP_ID;
+  const apiVersion = options.apiVersion || "v1";
 
-  const url = `${apiBaseUrl}/api/apps/v1/${appId}/${path}`;
+  const url = `${apiBaseUrl}/api/apps/${apiVersion}/${appId}/${path}`;
   const headers = {
     "Content-Type": "application/json",
   };
