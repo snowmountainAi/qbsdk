@@ -1,0 +1,33 @@
+name: deployment-ci
+
+on:
+  push:
+    paths:
+      - "packages/deployment/**"
+      - ".github/workflows/deployment-ci.yml"
+  pull_request:
+    paths:
+      - "packages/deployment/**"
+      - ".github/workflows/deployment-ci.yml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/deployment
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Syntax-check CLI entrypoints
+        run: |
+          node --check bin/deploy-server.js
+          node --check bin/deploy-frontend.js
+          node --check bin/deploy-cron-and-comms.js
+          node --check bin/lib/common.js
+      - name: Run tests
+        run: npm test

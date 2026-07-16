@@ -9,7 +9,7 @@
     "qb-deploy-cron-and-comms": "./bin/deploy-cron-and-comms.js"
   },
   "scripts": {
-    "test": "echo 'No tests yet'"
+    "test": "node --test"
   },
   "dependencies": {
     "@deno/sandbox": "^0.13.2",
