@@ -68,8 +68,13 @@ Environment:
   BACKEND_DIR             Backend folder name (default: backend)
   VITE_API_BASE_URL       QwikBuild platform API URL (required)
   VITE_APP_ID             Application ID (required)
-  DEPLOY_AUTH_SECRET      Per-app deploy-auth base secret for the authenticated
-                          v3 platform endpoints (required)
+  DEPLOY_AUTH_TOKEN       Precomputed per-app deploy token for the authenticated
+                          v3 platform endpoints: sha256(appId + base secret).
+                          The platform injects this per app; the base secret
+                          never reaches the app environment.
+  DEPLOY_AUTH_SECRET      DEPRECATED fallback: platform-wide base secret from
+                          which the token is derived locally. Only used when
+                          DEPLOY_AUTH_TOKEN is unset. One of the two is required.
 `);
 }
 
@@ -86,22 +91,32 @@ const env = requireEnvVars([
   "VERCEL_TOKEN",
   "VITE_API_BASE_URL",
   "VITE_APP_ID",
-  "DEPLOY_AUTH_SECRET",
 ]);
 
+if (!process.env.DEPLOY_AUTH_TOKEN && !process.env.DEPLOY_AUTH_SECRET) {
+  console.error("Error: Missing required environment variables:");
+  console.error("   - DEPLOY_AUTH_TOKEN (or the deprecated DEPLOY_AUTH_SECRET fallback)");
+  process.exit(1);
+}
 
 const VITE_APP_BASE_URL = process.env.VITE_APP_BASE_URL;
 const VITE_APP_ID = env.VITE_APP_ID;
 
 /**
  * Per-app deploy token for the authenticated v3 platform endpoints.
- * Must equal sha256(appId + DEPLOY_AUTH_SECRET) — the platform recomputes and
- * compares it in withDeployAuth. DEPLOY_AUTH_SECRET is distinct from the app's
- * JWT/testing secret.
+ * Must equal sha256(appId + base secret) — the platform recomputes and
+ * compares it in withDeployAuth. Preferred source is DEPLOY_AUTH_TOKEN,
+ * precomputed and injected per app so the platform-wide base secret never
+ * enters the app environment. DEPLOY_AUTH_SECRET (deriving the token locally
+ * from the base secret) is a deprecated fallback. Both are distinct from the
+ * app's JWT/testing secret.
  */
 function deployToken() {
+  if (process.env.DEPLOY_AUTH_TOKEN) {
+    return process.env.DEPLOY_AUTH_TOKEN;
+  }
   return createHash("sha256")
-    .update(VITE_APP_ID + env.DEPLOY_AUTH_SECRET)
+    .update(VITE_APP_ID + process.env.DEPLOY_AUTH_SECRET)
     .digest("hex");
 }
 
