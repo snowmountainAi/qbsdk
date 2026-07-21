@@ -176,6 +176,30 @@ export async function syncBackendEnvToProject(projectIdOrName, options = {}) {
 }
 
 /**
+ * Pin the project's serverless Function compute region.
+ *
+ * IMPORTANT: on non-Enterprise Vercel plans the compute region is a PROJECT
+ * setting (`serverlessFunctionRegion`, which also drives Fluid Compute's
+ * `functionDefaultRegions`). The per-deployment `regions` field and a `regions`
+ * key in vercel.json are NOT honored for Function compute — a deployment always
+ * runs in the project's region. So to actually control where the backend runs,
+ * qbsdk sets it on the project here, BEFORE building the deployment. Idempotent.
+ */
+export async function setProjectFunctionRegion(projectIdOrName, regions, options = {}) {
+  const {
+    vercel = createVercelClient(),
+    teamId = process.env.VERCEL_TEAM_ID,
+  } = options;
+  const region = (Array.isArray(regions) && regions[0]) || DEFAULT_FUNCTION_REGIONS[0];
+  if (!projectIdOrName || !region) return;
+  await vercel.projects.updateProject({
+    idOrName: projectIdOrName,
+    teamId,
+    requestBody: { serverlessFunctionRegion: region },
+  });
+}
+
+/**
  * Create a Vercel deployment from collected backend files.
  * Mirrors lib/deploy-files.ts in the Next.js app.
  */
@@ -191,7 +215,6 @@ export async function deployBackendFiles(options = {}) {
     config = backendProjectSettings,
     regions:
       explicitRegions = parseRegions(process.env.VERCEL_REGIONS) ??
-      readVercelJsonRegions(files) ??
       DEFAULT_FUNCTION_REGIONS,
   } = options;
 
@@ -204,6 +227,9 @@ export async function deployBackendFiles(options = {}) {
   const sanitizedName = sanitizeProjectName(deploymentName);
 
   if (projectId) {
+    // Pin the compute region on the project BEFORE building — this is what
+    // Vercel actually honors (the per-deployment `regions` below is ignored).
+    await setProjectFunctionRegion(projectId, regions, { vercel, teamId });
     await syncBackendEnvToProject(projectId, { vercel, teamId, platformEnv });
   }
 
@@ -240,7 +266,9 @@ export async function deployBackendFiles(options = {}) {
 
   if (!projectId) {
     // The project was auto-created by the first deployment above; now that it
-    // exists, sync the runtime env and redeploy so the app boots with it.
+    // exists, pin its compute region, sync the runtime env, and redeploy so the
+    // app boots in the right region with its env.
+    await setProjectFunctionRegion(targetProjectId, regions, { vercel, teamId });
     await syncBackendEnvToProject(targetProjectId, { vercel, teamId, platformEnv });
     finalDeployment = await vercel.deployments.createDeployment({
       requestBody: {
