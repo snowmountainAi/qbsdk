@@ -1,6 +1,6 @@
 # @qwikbuild/qbsdk-deployment
 
-Deployment tools for QwikBuild projects. Deploys Vercel backend servers, frontend applications, and cron/communication templates.
+Deployment tools for QwikBuild projects. Deploys Vercel backend servers, frontend applications, and communication templates.
 
 ## Installation
 
@@ -83,7 +83,7 @@ npx qb-deploy-frontend --full
 
 ### qb-deploy-cron-and-comms
 
-Deploys cron jobs and communication templates from backend configuration.
+Deploys communication templates from backend configuration.
 
 ```bash
 npx qb-deploy-cron-and-comms
@@ -91,8 +91,7 @@ npx qb-deploy-cron-and-comms
 
 **What it does:**
 1. Loads `CONFIG` from `backend/src/cron_n_comm_config.ts`
-2. Deploys cron job schedules to the platform
-3. Submits communication templates for approval
+2. Submits communication templates for approval
 
 **Required environment variables:**
 - `VITE_API_BASE_URL` - QwikBuild platform API URL
@@ -115,7 +114,7 @@ project/
 ├── backend/                       # Vercel/Hono backend (used by qb-deploy-server)
 │   ├── src/
 │   │   ├── main.ts                # Hono entry point
-│   │   └── cron_n_comm_config.ts  # Cron/comms config
+│   │   └── cron_n_comm_config.ts  # Comms config
 │   ├── package.json
 │   ├── package-lock.json
 │   ├── vercel.json
