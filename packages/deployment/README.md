@@ -1,6 +1,6 @@
 # @qwikbuild/qbsdk-deployment
 
-Deployment tools for QwikBuild projects. Deploys Vercel backend servers, frontend applications, and cron/communication templates.
+Deployment tools for QwikBuild projects. Deploys Vercel backend servers, frontend applications, and communication templates.
 
 ## Installation
 
@@ -114,7 +114,7 @@ project/
 ├── backend/                       # Vercel/Hono backend (used by qb-deploy-server)
 │   ├── src/
 │   │   ├── main.ts                # Hono entry point
-│   │   └── cron_n_comm_config.ts  # Cron/comms config
+│   │   └── cron_n_comm_config.ts  # Comms config
 │   ├── package.json
 │   ├── package-lock.json
 │   ├── vercel.json
