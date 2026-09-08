@@ -48,7 +48,7 @@ export function requireEnvVars(varNames) {
  * URL: ${VITE_API_BASE_URL}/api/apps/${apiVersion}/${VITE_APP_ID}/${path}
  *
  * @param {string} method - HTTP method (GET, POST, etc.)
- * @param {string} path - Path after /api/apps/{version}/{appId}/, e.g. "request-template-approval"
+ * @param {string} path - Path after /api/apps/{version}/{appId}/, e.g. "cron/create"
  * @param {object} [body] - JSON body (will be stringified)
  * @param {object} [options]
  * @param {string} [options.apiKey] - If provided, sent as Bearer token in Authorization header

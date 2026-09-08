@@ -3,10 +3,8 @@
 // The backend handles S3 upload and platform notification — no CDN credentials needed on the CLI side.
 //
 // Usage:
-//   npx qb-deploy-frontend                      # default: dist-only mode
-//   npx qb-deploy-frontend --full               # include full source code
-//   npx qb-deploy-frontend --target=cf-plat     # publish to Cloudflare Workers for Platforms
-//   npx qb-deploy-frontend cf-plat              # positional alias for the above
+//   npx qb-deploy-frontend              # default: dist-only mode
+//   npx qb-deploy-frontend --full       # include full source code
 //
 // Required env vars:
 //   AGENTQ_API_URL             - AgentQ backend base URL
@@ -28,21 +26,6 @@ const env = requireEnvVars([
 
 // Parse CLI flags: --full sends entire project, default is dist-only
 const includeSource = process.argv.includes("--full");
-
-// Deploy target. Absent => today's behaviour exactly (S3 + Caddy), which is what
-// keeps every already-published copy of this CLI working unchanged.
-// Accepts --target=cf-plat, --target cf-plat, or a bare positional "cf-plat".
-const deployTarget = (() => {
-  const argv = process.argv.slice(2);
-  const eq = argv.find((a) => a.startsWith("--target="));
-  if (eq) return eq.slice("--target=".length).trim();
-  const flagIdx = argv.indexOf("--target");
-  if (flagIdx !== -1 && argv[flagIdx + 1] && !argv[flagIdx + 1].startsWith("-")) {
-    return argv[flagIdx + 1].trim();
-  }
-  if (argv.includes("cf-plat")) return "cf-plat";
-  return "";
-})();
 
 // ─── Step 1: Build Frontend ─────────────────────────────────────────────────
 
@@ -223,14 +206,10 @@ async function createArchive() {
  */
 async function uploadToBackend(archivePath) {
   const mode = includeSource ? "full" : "dist";
-  // An older backend simply ignores an unknown query param, so a new CLI still
-  // deploys successfully the old way rather than erroring.
-  const targetParam = deployTarget ? `&target=${encodeURIComponent(deployTarget)}` : "";
-  const url = `${env.AGENTQ_API_URL}/projects/${process.env.URL_SLUG}/deploy-frontend?mode=${mode}${targetParam}`;
+  const url = `${env.AGENTQ_API_URL}/projects/${process.env.URL_SLUG}/deploy-frontend?mode=${mode}`;
   console.log(`Uploading archive to backend...`);
   // console.log(`   URL: ${url}`);
   console.log(`   Mode: ${mode}`);
-  if (deployTarget) console.log(`   Target: ${deployTarget}`);
 
   try {
     const fileBuffer = readFileSync(archivePath);
@@ -308,29 +287,8 @@ async function deploy() {
     // Summary
     console.log("Frontend deployment completed!");
     if (uploadResult.data) {
-      const wfp = uploadResult.data.workers_platform;
-      if (wfp && wfp.enabled && wfp.ok) {
-        // A build is NOT live. Printing the production URL here would be a lie
-        // the agent then relays to the user.
-        // The dev URL is listed FIRST because it is the stable one worth sharing;
-        // the per-build URL below only matters for pinning this exact build.
-        if (wfp.dev_url) {
-          console.log(`   Dev URL: ${wfp.dev_url}  (stable - always latest)`);
-          if (wfp.dev_url_updated === false) {
-            console.log(`      WARNING: could not repoint the dev URL to this build`);
-          }
-        }
-        console.log(`   This build: ${wfp.build_url}`);
-        console.log(`   Build number: ${wfp.build_number}`);
-        console.log(`   Production: UNCHANGED - promote from the console to go live`);
-      } else {
-        if (wfp && wfp.enabled && !wfp.ok) {
-          console.log(`   Workers for Platforms publish failed: ${wfp.error}`);
-          console.log(`   Fell back to the standard deployment path.`);
-        }
-        const envPrefix = env.AGENTQ_API_URL.replace('https://consoleq.','').replace('https://console.','').replace('qwikbuild.com/api','');
-        console.log(`   Deployment URL: https://${process.env.URL_SLUG}.${envPrefix}qwikbuild.site`);
-      }
+      const envPrefix = env.AGENTQ_API_URL.replace('https://consoleq.','').replace('https://console.','').replace('qwikbuild.com/api','');
+      console.log(`   Deployment URL: https://${process.env.URL_SLUG}.${envPrefix}qwikbuild.site`);
       console.log(`   Source files: ${uploadResult.data.source_uploaded || "N/A"}`);
       console.log(`   Dist files: ${uploadResult.data.dist_uploaded || "N/A"}`);
       console.log(`   Deployment Job Started: ${uploadResult.data.notification_sent ? "Success" : "failed"}`);

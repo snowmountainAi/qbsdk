@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Deploy communication templates from backend/src/cron_n_comm_config.ts
+// Deploy cron jobs and communication templates from backend/src/cron_n_comm_config.ts
 // Usage: npx qb-deploy-cron-and-comms
 // Requires: VITE_API_BASE_URL, VITE_APP_ID, QWIKBUILD_PLATFORM_API_KEY as environment variables
 
@@ -14,7 +14,7 @@ const env = requireEnvVars(["VITE_API_BASE_URL", "VITE_APP_ID", "QWIKBUILD_PLATF
 // Indicators for agents
 
 console.log("==========================")
-console.log("Deploying communication templates to Qwikbuild")
+console.log("Deploying Cron Jobs and Communication templates to Qwikbuild")
 console.log("==========================")
 
 
@@ -36,6 +36,89 @@ try {
 } catch (error) {
   console.error(`Error loading config from ${configPath}:`, error.message);
   process.exit(1);
+}
+
+async function sendCronConfig() {
+  try {
+    const config = CONFIG;
+
+    if (!config.cron || !Array.isArray(config.cron)) {
+      throw new Error('Config file must contain a "cron" array');
+    }
+
+    console.log(`\nFound ${config.cron.length} cron job(s) to create:`);
+    config.cron.forEach((job, index) => {
+      console.log(`  ${index + 1}. ${job.name} - ${job.schedule}`);
+    });
+
+    if (config.cron.length === 0) {
+      console.log("No cron jobs to deploy. Skipping deployment.");
+      return;
+    }
+
+    console.log(`Sending cron config to platform...`);
+
+    const response = await platformApiCall("POST", "cron/create", config.cron, {
+      apiKey: env.QWIKBUILD_PLATFORM_API_KEY,
+    });
+
+    // Check if response is JSON
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      const responseText = await response.text();
+      console.error("Error: Server returned non-JSON response");
+      console.error("Content-Type:", contentType);
+      console.error("Response body:", responseText);
+      throw new Error("Non-JSON response received");
+    }
+
+    const responseData = await response.json();
+
+    if (!response.ok) {
+      console.error("API Error:", response.status, response.statusText);
+      console.error("Response:", JSON.stringify(responseData, null, 2));
+      throw new Error(`API request failed: ${response.status}`);
+    }
+
+    // Display results
+    console.log("Cron schedules response:");
+    console.log(`   Overall success: ${responseData.success}`);
+    console.log(`   Message: ${responseData.message}`);
+
+    let hasCronFailures = false;
+    if (responseData.results) {
+      console.log("Individual results:");
+      responseData.results.forEach((result, index) => {
+        const status = result.success ? "OK" : "FAIL";
+        console.log(
+          `   ${status} ${result.name}: ${
+            result.success ? "Created" : result.error
+          }`
+        );
+        if (result.ruleArn) {
+          console.log(`      ARN: ${result.ruleArn}`);
+        }
+        if (!result.success) {
+          hasCronFailures = true;
+          // Detect schedule format errors and provide actionable guidance
+          if (result.error && result.error.includes("Invalid Schedule Expression")) {
+            console.log(`      FIX: The schedule must use AWS EventBridge 6-field cron format.`);
+            console.log(`           Format: minutes hours day-of-month month day-of-week year`);
+            console.log(`           Example: "0 2 * * ? *" (daily at 2 AM UTC)`);
+            console.log(`           Common mistake: using 5-field Unix cron (e.g., "0 2 * * *") instead of 6-field AWS cron.`);
+            console.log(`           Use the scheduled_tasks_integration skill for correct format reference.`);
+          }
+        }
+      });
+    }
+
+    if (hasCronFailures) {
+      throw new Error("Some cron jobs failed to deploy. See errors above.");
+    }
+  } catch (error) {
+    console.error("Error deploying cron jobs:", error.message);
+    throw error;
+  }
 }
 
 async function sendTemplatesForApproval() {
@@ -125,16 +208,34 @@ async function sendTemplatesForApproval() {
   }
 }
 
+// Main function to run both deployments
 async function deployAll() {
-  console.log("Starting deployment of communication templates...\n");
+  console.log("Starting deployment of cron jobs and communication templates...\n");
+
+  let hasFailure = false;
+
+  try {
+    await sendCronConfig();
+    console.log("Cron deployment completed successfully!");
+  } catch (error) {
+    console.error("\nCron deployment failed:", error.message);
+    hasFailure = true;
+  }
 
   try {
     await sendTemplatesForApproval();
-    console.log("\nCommunication template deployment completed successfully!");
+    console.log("Communication template deployment completed successfully!");
   } catch (error) {
     console.error("\nCommunication template deployment failed:", error.message);
+    hasFailure = true;
+  }
+
+  if (hasFailure) {
+    console.error("\nDeployment completed with failures. Exiting with error code.");
     process.exit(1);
   }
+
+  console.log("\nAll deployments completed successfully!");
 }
 
 // Run the script
