@@ -1,6 +1,6 @@
 {
   "name": "@qwikbuild/qbsdk-deployment",
-  "version": "3.0.2",
+  "version": "3.2.0",
   "description": "Deployment tools for QwikBuild projects - server, frontend, and communication template deployment",
   "type": "module",
   "bin": {
