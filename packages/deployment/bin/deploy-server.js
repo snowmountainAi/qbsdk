@@ -100,6 +100,22 @@ if (!process.env.DEPLOY_AUTH_TOKEN && !process.env.DEPLOY_AUTH_SECRET) {
 }
 
 const VITE_APP_BASE_URL = process.env.VITE_APP_BASE_URL;
+
+// Which of the app's backends this deploy is. Absent means production, so
+// every existing caller keeps the behaviour it has.
+//
+// It has to be sent: set-server-url writes metadata.url — PRODUCTION's address
+// — when no tier is named, so a tier deploy that stayed silent would repoint
+// production's traffic at itself.
+const QB_TIER = (process.env.QB_TIER || "").trim().toLowerCase();
+if (QB_TIER && !["dev", "staging"].includes(QB_TIER)) {
+  console.error(
+    `QB_TIER=${QB_TIER} is not a tier. Expected "dev", "staging", or unset ` +
+      "for production. Refusing to deploy rather than register this URL as " +
+      "production's.",
+  );
+  process.exit(1);
+}
 const VITE_APP_ID = env.VITE_APP_ID;
 
 /**
@@ -286,13 +302,22 @@ async function deploy() {
     }
 
     if (!cli.skipPlatform) {
-      const setUrlResponse = await platformApiCall("POST", "set-server-url", { url: deploymentUrl }, v3Auth());
+      const setUrlResponse = await platformApiCall(
+        "POST",
+        "set-server-url",
+        QB_TIER ? { url: deploymentUrl, tier: QB_TIER } : { url: deploymentUrl },
+        v3Auth(),
+      );
       if (!setUrlResponse.ok) {
         throw new Error(
           `Failed to set server URL (${setUrlResponse.status}): ${await setUrlResponse.text()}`,
         );
       }
-      console.log("Registered deployment URL with QwikBuild platform.");
+      console.log(
+        QB_TIER
+          ? `Registered deployment URL with QwikBuild platform for tier '${QB_TIER}'.`
+          : "Registered deployment URL with QwikBuild platform.",
+      );
     }
   } catch (error) {
     console.error("Deployment failed. Error:", error?.message ?? error);
