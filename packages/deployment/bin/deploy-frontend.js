@@ -346,7 +346,14 @@ async function deploy() {
       }
       console.log(`   Source files: ${uploadResult.data.source_uploaded || "N/A"}`);
       console.log(`   Dist files: ${uploadResult.data.dist_uploaded || "N/A"}`);
-      console.log(`   Deployment Job Started: ${uploadResult.data.notification_sent ? "Success" : "failed"}`);
+      // Apps with environments are served from Cloudflare only, so the platform
+      // deliberately does not start the EC2 copy job; that is not a failure.
+      const jobStatus = uploadResult.data.notification_sent
+        ? "Success"
+        : uploadResult.data.notification_skipped
+          ? `skipped (${uploadResult.data.notification_skipped}: served from Cloudflare only)`
+          : "failed";
+      console.log(`   Deployment Job Started: ${jobStatus}`);
     }
 
   } catch (error) {
