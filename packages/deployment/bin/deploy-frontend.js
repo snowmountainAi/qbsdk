@@ -320,9 +320,22 @@ async function deploy() {
             console.log(`      WARNING: could not repoint the dev URL to this build`);
           }
         }
-        console.log(`   This build: ${wfp.build_url}`);
+        // Only dev can serve a per-build hostname; elsewhere the platform
+        // sends none, and printing "null" helps nobody.
+        if (wfp.build_url) {
+          console.log(`   This build: ${wfp.build_url}`);
+        }
         console.log(`   Build number: ${wfp.build_number}`);
-        console.log(`   Production: UNCHANGED - promote from the console to go live`);
+        // With environments, production is reached through staging, not by
+        // promoting a build, so say which of the two applies.
+        const tier = (process.env.QB_TIER || process.env.VITE_QB_TIER || "").trim();
+        if (tier) {
+          console.log(`   Deployed to: ${tier} only`);
+          console.log(`   Production: UNCHANGED - release it with Stage, then Ship (Deployments)`);
+        } else {
+          console.log(`   Production: UNCHANGED - use Deploy to Production on this build (Deployments)`);
+        }
+        console.log(`   Share the Dev URL above; the production URL is not updated by this deploy.`);
       } else {
         if (wfp && wfp.enabled && !wfp.ok) {
           console.log(`   Workers for Platforms publish failed: ${wfp.error}`);
