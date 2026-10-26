@@ -11,7 +11,11 @@
 // Required env vars:
 //   AGENTQ_API_URL             - AgentQ backend base URL
 //   URL_SLUG                   - Project URL slug
-//   QWIKBUILD_PLATFORM_API_KEY - API key for backend authentication
+//   DEPLOY_AUTH_TOKEN          - Per-app deploy token, sha256(appId + DEPLOY_AUTH_SECRET).
+//                                Valid for this app only.
+//   QWIKBUILD_PLATFORM_API_KEY - Deprecated fallback when DEPLOY_AUTH_TOKEN is unset.
+//                                The same key is in every app's sandbox, so agentQ
+//                                logs each deploy that still uses it.
 
 import { readFileSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
@@ -23,8 +27,15 @@ loadEnv();
 
 const env = requireEnvVars([
   "AGENTQ_API_URL",
-  "QWIKBUILD_PLATFORM_API_KEY",
 ]);
+
+const deployAuthToken =
+  process.env.DEPLOY_AUTH_TOKEN || process.env.QWIKBUILD_PLATFORM_API_KEY;
+if (!deployAuthToken) {
+  console.error("Error: Missing required environment variables:");
+  console.error("   - DEPLOY_AUTH_TOKEN (or the deprecated QWIKBUILD_PLATFORM_API_KEY fallback)");
+  process.exit(1);
+}
 
 // Parse CLI flags: --full sends entire project, default is dist-only
 const includeSource = process.argv.includes("--full");
@@ -242,7 +253,7 @@ async function uploadToBackend(archivePath) {
     const response = await fetch(url, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${env.QWIKBUILD_PLATFORM_API_KEY}`,
+        "Authorization": `Bearer ${deployAuthToken}`,
       },
       body: formData,
     });
