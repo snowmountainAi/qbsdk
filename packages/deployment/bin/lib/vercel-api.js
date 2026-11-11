@@ -1,10 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { Vercel } from "@vercel/sdk";
-import { Framework, SkipAutoDetectionConfirmation } from "@vercel/sdk/models/createdeploymentvaluedeployments2.js";
-import {
-  TwoTarget,
-  TwoType,
-} from "@vercel/sdk/models/createprojectenvop.js";
+
+// The SDK's enums are plain string maps, and the generated files that export
+// them get renamed between SDK releases (createdeploymentvaluedeployments2.js
+// is gone in 1.28.61). Importing them pinned this package to one SDK build, so
+// the values the Vercel API accepts are spelled out here instead.
+const Framework = { Hono: "hono" };
+const SkipAutoDetectionConfirmation = { Zero: "0", One: "1" };
+const TwoTarget = { Production: "production", Preview: "preview", Development: "development" };
+const TwoType = { Encrypted: "encrypted", Plain: "plain" };
 import { parseBackendEnvFile } from "./parse-env-file.js";
 import { resolveBackendRoot } from "./backend-path.js";
 

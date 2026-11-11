@@ -1,6 +1,6 @@
 {
   "name": "@qwikbuild/qbsdk-deployment",
-  "version": "3.2.3",
+  "version": "3.2.4",
   "description": "Deployment tools for QwikBuild projects - server, frontend, and communication template deployment",
   "type": "module",
   "bin": {
@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@deno/sandbox": "^0.13.2",
-    "@vercel/sdk": "^1.28.6",
+    "@vercel/sdk": "^1.28.61",
     "dotenv": "^17.2.2"
   },
   "engines": {
