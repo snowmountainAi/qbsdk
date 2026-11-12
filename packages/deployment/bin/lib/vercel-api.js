@@ -10,6 +10,34 @@ const SkipAutoDetectionConfirmation = { Zero: "0", One: "1" };
 const TwoTarget = { Production: "production", Preview: "preview", Development: "development" };
 const TwoType = { Encrypted: "encrypted", Plain: "plain" };
 import { parseBackendEnvFile } from "./parse-env-file.js";
+
+/**
+ * Await an SDK call, but accept Vercel's reply when only the SDK's response
+ * schema rejects it. By then the request has succeeded; the SDK's generated
+ * schema just lags the live API (a new nodeVersion such as "26.x", or a
+ * project firewall config without `managedRules.traffic_sources`). Failing
+ * there aborted deploys that Vercel had already accepted. Matched by name so
+ * no SDK-internal module is imported.
+ */
+export async function tolerateSchemaDrift(promise, label = "Vercel API call") {
+  try {
+    return await promise;
+  } catch (error) {
+    if (error?.name === "ResponseValidationError" && error.rawValue !== undefined) {
+      const paths = (error.cause?.issues ?? [])
+        .flatMap((issue) => [issue, ...(issue.unionErrors ?? []).flatMap((u) => u.issues ?? [])])
+        .map((issue) => (issue.path ?? []).join("."))
+        .filter(Boolean);
+      const where = [...new Set(paths)].slice(0, 3).join(", ");
+      console.warn(
+        `Warning: ${label} succeeded, but the Vercel SDK did not recognise part of the reply` +
+          `${where ? ` (${where})` : ""}; continuing with the raw reply.`,
+      );
+      return error.rawValue;
+    }
+    throw error;
+  }
+}
 import { resolveBackendRoot } from "./backend-path.js";
 
 const MAX_PROJECT_NAME_LENGTH = 100;
@@ -164,17 +192,20 @@ export async function syncBackendEnvToProject(projectIdOrName, options = {}) {
     return 0;
   }
 
-  await vercel.projects.createProjectEnv({
-    idOrName: projectIdOrName,
-    upsert: "true",
-    teamId,
-    requestBody: entries.map(([key, value]) => ({
-      key,
-      value,
-      type: getEnvVarType(key),
-      target: [TwoTarget.Production, TwoTarget.Preview, TwoTarget.Development],
-    })),
-  });
+  await tolerateSchemaDrift(
+    vercel.projects.createProjectEnv({
+      idOrName: projectIdOrName,
+      upsert: "true",
+      teamId,
+      requestBody: entries.map(([key, value]) => ({
+        key,
+        value,
+        type: getEnvVarType(key),
+        target: [TwoTarget.Production, TwoTarget.Preview, TwoTarget.Development],
+      })),
+    }),
+    "Syncing project env",
+  );
 
   return entries.length;
 }
@@ -196,11 +227,14 @@ export async function setProjectFunctionRegion(projectIdOrName, regions, options
   } = options;
   const region = (Array.isArray(regions) && regions[0]) || DEFAULT_FUNCTION_REGIONS[0];
   if (!projectIdOrName || !region) return;
-  await vercel.projects.updateProject({
-    idOrName: projectIdOrName,
-    teamId,
-    requestBody: { serverlessFunctionRegion: region },
-  });
+  await tolerateSchemaDrift(
+    vercel.projects.updateProject({
+      idOrName: projectIdOrName,
+      teamId,
+      requestBody: { serverlessFunctionRegion: region },
+    }),
+    "Setting the function region",
+  );
 }
 
 /**
@@ -237,20 +271,23 @@ export async function deployBackendFiles(options = {}) {
     await syncBackendEnvToProject(projectId, { vercel, teamId, platformEnv });
   }
 
-  const deployment = await vercel.deployments.createDeployment({
-    requestBody: {
-      name: sanitizedName,
-      files: deploymentFiles,
-      project: projectId,
-      projectSettings: config,
-      target: "production",
-      regions,
-    },
-    skipAutoDetectionConfirmation: config
-      ? SkipAutoDetectionConfirmation.Zero
-      : SkipAutoDetectionConfirmation.One,
-    teamId,
-  });
+  const deployment = await tolerateSchemaDrift(
+    vercel.deployments.createDeployment({
+      requestBody: {
+        name: sanitizedName,
+        files: deploymentFiles,
+        project: projectId,
+        projectSettings: config,
+        target: "production",
+        regions,
+      },
+      skipAutoDetectionConfirmation: config
+        ? SkipAutoDetectionConfirmation.Zero
+        : SkipAutoDetectionConfirmation.One,
+      teamId,
+    }),
+    "Creating the deployment",
+  );
 
   const targetProjectId = projectId ?? deployment.projectId;
 
@@ -260,11 +297,14 @@ export async function deployBackendFiles(options = {}) {
   // (consoleq-provisioned) and an auto-created one — previously it only ran in
   // the auto-create branch, so once get-server-project returned a real project
   // id the deployments came up protected.
-  await vercel.projects.updateProject({
-    requestBody: { ssoProtection: null },
-    idOrName: targetProjectId,
-    teamId,
-  });
+  await tolerateSchemaDrift(
+    vercel.projects.updateProject({
+      requestBody: { ssoProtection: null },
+      idOrName: targetProjectId,
+      teamId,
+    }),
+    "Turning off deployment protection",
+  );
 
   let finalDeployment = deployment;
 
@@ -274,24 +314,30 @@ export async function deployBackendFiles(options = {}) {
     // app boots in the right region with its env.
     await setProjectFunctionRegion(targetProjectId, regions, { vercel, teamId });
     await syncBackendEnvToProject(targetProjectId, { vercel, teamId, platformEnv });
-    finalDeployment = await vercel.deployments.createDeployment({
-      requestBody: {
-        deploymentId: deployment.id,
-        name: sanitizedName,
-        project: targetProjectId,
-        target: "production",
-        regions,
-      },
-      teamId,
-    });
+    finalDeployment = await tolerateSchemaDrift(
+      vercel.deployments.createDeployment({
+        requestBody: {
+          deploymentId: deployment.id,
+          name: sanitizedName,
+          project: targetProjectId,
+          target: "production",
+          regions,
+        },
+        teamId,
+      }),
+      "Redeploying with env",
+    );
   }
 
   if (domain) {
-    await vercel.projects.addProjectDomain({
-      idOrName: targetProjectId,
-      requestBody: { name: domain },
-      teamId,
-    });
+    await tolerateSchemaDrift(
+      vercel.projects.addProjectDomain({
+        idOrName: targetProjectId,
+        requestBody: { name: domain },
+        teamId,
+      }),
+      "Adding the domain",
+    );
   }
 
   return {
@@ -304,9 +350,12 @@ export async function deployBackendFiles(options = {}) {
 
 export async function getDeploymentStatus(deploymentId, options = {}) {
   const { vercel = createVercelClient() } = options;
-  const deployment = await vercel.deployments.getDeployment({
-    idOrUrl: deploymentId,
-  });
+  const deployment = await tolerateSchemaDrift(
+    vercel.deployments.getDeployment({
+      idOrUrl: deploymentId,
+    }),
+    "Reading the deployment status",
+  );
 
   return {
     readyState: deployment.readyState,
