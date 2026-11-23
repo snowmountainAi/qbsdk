@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseArgs, normalizeTier } from "../bin/deploy-gcp.js";
+import { parseArgs, normalizeTier, FRONTEND_BUILD_ENV } from "../bin/deploy-gcp.js";
 
 test("tier defaults to QB_TIER, then production; prod is an alias", () => {
   assert.equal(parseArgs(["server"]).opts.tier, "production");
@@ -31,4 +31,13 @@ test("frontend takes --tier and the --no-build switch", () => {
   assert.equal(opts["no-build"], true);
   assert.equal(opts.tier, "dev");
   assert.throws(() => parseArgs(["server", "--no-build"]), /not an option/);
+});
+
+test("crons takes --tier only", () => {
+  assert.equal(parseArgs(["crons", "--tier", "staging"]).opts.tier, "staging");
+  assert.throws(() => parseArgs(["crons", "--since", "1h"]), /not an option/);
+});
+
+test("the frontend build points the app at /api on its own hostname", () => {
+  assert.equal(FRONTEND_BUILD_ENV.VITE_BACKEND_SERVER_URL, "/api");
 });

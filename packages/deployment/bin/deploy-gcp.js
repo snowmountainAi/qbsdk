@@ -1,13 +1,16 @@
 #!/usr/bin/env node
-// Deploy and inspect a GCP-template app backend on Google Cloud Run.
+// Deploy and inspect a GCP-template app on Google Cloud Run.
 //
 // The sandbox holds no Google credentials. `server` packs backend/ and shared/
 // and sends them to AgentQ, which builds the image with Cloud Build and deploys
-// the app tier's Cloud Run service. `status` and `logs` read that service.
+// the app tier's Cloud Run service. `frontend` builds dist/ (pointing the app
+// at /api on its own hostname) and sends it the same way; it is served by its
+// own Cloud Run service behind the CDN. `status` and `logs` read the backend.
 //
 // Usage:
 //   npx qb-deploy-gcp server   [--tier dev|staging|production]
 //   npx qb-deploy-gcp frontend [--tier ...] [--no-build]
+//   npx qb-deploy-gcp crons    [--tier ...]   (also done by every server deploy)
 //   npx qb-deploy-gcp status [--tier ...]
 //   npx qb-deploy-gcp logs   [--tier ...] [--since 1h] [--severity ERROR] [--limit 200] [--build <id>]
 //   npx qb-deploy-gcp help
@@ -19,13 +22,13 @@
 //   URL_SLUG           - Project URL slug
 //   DEPLOY_AUTH_TOKEN  - Per-app deploy token, sha256(appId + DEPLOY_AUTH_SECRET)
 
-import { existsSync, realpathSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { loadEnv, ROOT_DIR } from "./lib/common.js";
 
-const COMMANDS = ["server", "frontend", "status", "logs", "help"];
+const COMMANDS = ["server", "frontend", "crons", "status", "logs", "help"];
 const BOOLEAN_FLAGS = ["no-build"];
 const TIERS = ["production", "dev", "staging"];
 const SEVERITIES = ["DEBUG", "INFO", "NOTICE", "WARNING", "ERROR", "CRITICAL"];
@@ -49,7 +52,7 @@ export function parseArgs(argv, env = {}) {
     opts[key] = value;
   }
   if (!COMMANDS.includes(command)) throw new Error(`Unknown command "${command}". Use: ${COMMANDS.join(", ")}`);
-  const allowed = { server: ["tier"], frontend: ["tier", "no-build"], status: ["tier"], logs: ["tier", "since", "severity", "limit", "build"], help: [] }[command];
+  const allowed = { server: ["tier"], frontend: ["tier", "no-build"], crons: ["tier"], status: ["tier"], logs: ["tier", "since", "severity", "limit", "build"], help: [] }[command];
   for (const k of Object.keys(opts)) {
     if (!allowed.includes(k)) throw new Error(`--${k} is not an option of "${command}"`);
   }
@@ -147,7 +150,21 @@ async function deployServer(cfg, opts) {
   form.append("file", new Blob([archive], { type: "application/gzip" }), "backend.tar.gz");
   const start = await api(cfg, `/backend/deploy${query({ tier: opts.tier })}`, { method: "POST", body: form });
   console.log(`Build ${start.deployId} started for service ${start.service} (${start.region})`);
+  const p = await waitDeploy(cfg, opts, "backend", start.deployId);
+  if (!p) return 1;
+  console.log(`Deployed revision ${p.revision}`);
+  console.log(`Backend URL: ${p.url}`);
+  if (p.appUrl) console.log(`On the app hostname: ${p.appUrl}/api`);
+  if (p.crons) {
+    const n = (a) => (a || []).length;
+    console.log(`Crons: ${n(p.crons.created)} created, ${n(p.crons.updated)} updated, ${n(p.crons.deleted)} removed`);
+  }
+  if (p.warning) console.log(`Warning: ${p.warning}`);
+  return 0;
+}
 
+// Poll a deploy, printing build log lines; returns the final progress or null.
+async function waitDeploy(cfg, opts, kind, deployId) {
   let cursor;
   let phase = "building";
   const deadline = Date.now() + DEPLOY_TIMEOUT_MS;
@@ -155,7 +172,7 @@ async function deployServer(cfg, opts) {
     await new Promise((r) => setTimeout(r, POLL_MS));
     let p;
     try {
-      p = await api(cfg, `/backend/deploys/${start.deployId}${query({ after: cursor })}`);
+      p = await api(cfg, `/${kind}/deploys/${deployId}${query({ after: cursor })}`);
     } catch (e) {
       if (e.status >= 500 || e.cause) { console.log(`   (progress check failed, retrying: ${e.message})`); continue; }
       throw e;
@@ -166,26 +183,29 @@ async function deployServer(cfg, opts) {
       phase = p.phase;
       if (phase === "deploying") console.log("Build succeeded. Deploying the new revision...");
     }
-    if (phase === "done") {
-      console.log(`Deployed revision ${p.revision}`);
-      console.log(`Backend URL: ${p.url}`);
-      return 0;
-    }
+    if (phase === "done") return p;
     if (phase === "failed") {
       console.error(`Deploy failed: ${p.error}`);
-      console.error(`Build log: npx qb-deploy-gcp logs --tier ${opts.tier} --build ${start.deployId}`);
-      return 1;
+      console.error(`Build log: npx qb-deploy-gcp logs --tier ${opts.tier} --build ${deployId}`);
+      return null;
     }
   }
   console.error(`Timed out waiting for the deploy. Check: npx qb-deploy-gcp status --tier ${opts.tier}`);
-  return 1;
+  return null;
 }
 
 // ─── frontend ──────────────────────────────────────────────────────────────
 
-function run(cmd, args) {
+// The deployed frontend calls its backend on the same hostname: the load
+// balancer sends /api/* to the backend service (with /api removed).
+export const FRONTEND_BUILD_ENV = { VITE_BACKEND_SERVER_URL: "/api" };
+
+function run(cmd, args, env = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd, args, { cwd: ROOT_DIR, stdio: "inherit", shell: process.platform === "win32" });
+    const child = spawn(cmd, args, {
+      cwd: ROOT_DIR, stdio: "inherit", shell: process.platform === "win32",
+      env: { ...process.env, ...env },
+    });
     child.on("error", reject);
     child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} ${args.join(" ")} failed (${code})`))));
   });
@@ -195,7 +215,7 @@ async function deployFrontend(cfg, opts) {
   console.log(`Deploying frontend (tier: ${opts.tier})`);
   if (!opts["no-build"]) {
     console.log("Building: pnpm run frontend:build");
-    await run("pnpm", ["run", "frontend:build"]);
+    await run("pnpm", ["run", "frontend:build"], FRONTEND_BUILD_ENV);
   }
   if (!existsSync(join(ROOT_DIR, "dist", "index.html"))) {
     throw new Error("dist/index.html not found. The build writes to dist/ at the project root.");
@@ -204,12 +224,30 @@ async function deployFrontend(cfg, opts) {
   console.log(`Uploading ${(archive.length / 1024).toFixed(0)} KB`);
   const form = new FormData();
   form.append("file", new Blob([archive], { type: "application/gzip" }), "dist.tar.gz");
-  const r = await api(cfg, `/frontend/deploy${query({ tier: opts.tier })}`, { method: "POST", body: form });
-  console.log(`Release ${r.release} is live (${r.files} files, ${r.seconds}s)`);
-  console.log(`Frontend URL: ${r.url}`);
-  if (r.firstDeploy) {
+  const start = await api(cfg, `/frontend/deploy${query({ tier: opts.tier })}`, { method: "POST", body: form });
+  console.log(`Build ${start.deployId} started for release ${start.release}`);
+  const p = await waitDeploy(cfg, opts, "frontend", start.deployId);
+  if (!p) return 1;
+  console.log(`Release ${p.revision} is live`);
+  console.log(`Frontend URL: ${p.url}`);
+  if (p.firstDeploy) {
     console.log("First deploy of this app's hostname: it can take 2-5 minutes to reach every edge.");
   }
+  if (p.warning) console.log(`Warning: ${p.warning}`);
+  return 0;
+}
+
+// ─── crons ─────────────────────────────────────────────────────────────────
+
+async function syncCrons(cfg, opts) {
+  const file = join(ROOT_DIR, "backend", "crons.json");
+  const body = existsSync(file) ? readFileSync(file, "utf8") : '{"crons": []}';
+  try { JSON.parse(body); } catch (e) { throw new Error(`backend/crons.json is not valid JSON: ${e.message}`); }
+  const r = await api(cfg, `/crons/sync${query({ tier: opts.tier })}`, {
+    method: "POST", body, headers: { "Content-Type": "application/json" },
+  });
+  const n = (a) => (a || []).length;
+  console.log(`Crons (tier ${opts.tier}): ${n(r.created)} created, ${n(r.updated)} updated, ${n(r.deleted)} removed`);
   return 0;
 }
 
@@ -248,10 +286,11 @@ async function logs(cfg, opts) {
 }
 
 function help() {
-  console.log(`qb-deploy-gcp: deploy and inspect this app's backend on Google Cloud Run
+  console.log(`qb-deploy-gcp: deploy and inspect this app on Google Cloud Run
 
   npx qb-deploy-gcp server   [--tier dev|staging|production]
   npx qb-deploy-gcp frontend [--tier ...] [--no-build]
+  npx qb-deploy-gcp crons    [--tier ...]   sync backend/crons.json (server does this too)
   npx qb-deploy-gcp status [--tier ...]
   npx qb-deploy-gcp logs   [--tier ...] [--since 1h] [--severity ERROR] [--limit 200] [--build <id>]
 
@@ -274,6 +313,7 @@ export async function main(argv = process.argv.slice(2)) {
   try {
     if (command === "server") return await deployServer(cfg, opts);
     if (command === "frontend") return await deployFrontend(cfg, opts);
+    if (command === "crons") return await syncCrons(cfg, opts);
     if (command === "status") return await status(cfg, opts);
     return await logs(cfg, opts);
   } catch (e) {
