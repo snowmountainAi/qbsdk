@@ -1,6 +1,6 @@
 {
   "name": "@qwikbuild/qbsdk-db-tools",
-  "version": "1.0.1",
+  "version": "1.0.2-beta.1",
   "description": "Database migration and seeding tools for QwikBuild projects",
   "type": "module",
   "bin": {
@@ -9,7 +9,7 @@
     "qb-db-pull": "./bin/db-pull.js"
   },
   "scripts": {
-    "test": "echo 'No tests yet'"
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "dotenv": "^17.2.2",

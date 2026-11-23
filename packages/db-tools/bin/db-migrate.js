@@ -8,6 +8,7 @@
 import { readFile, readdir, stat, mkdir } from "fs/promises";
 import { join, resolve } from "path";
 import { spawn } from "child_process";
+import { psqlArgs } from "./psql-url.js";
 import dotenv from "dotenv";
 
 // Suppress EPIPE errors on stdout/stderr — these occur in sandboxed
@@ -85,7 +86,7 @@ async function runDrizzlePull() {
 
 async function runPsql(sql, errorMessage = "SQL execution failed") {
   return new Promise((resolve, reject) => {
-    const proc = spawn("psql", [databaseUrl, "-v", "ON_ERROR_STOP=1", "-t", "-A"], {
+    const proc = spawn("psql", psqlArgs(databaseUrl, "-v", "ON_ERROR_STOP=1", "-t", "-A"), {
       stdio: ["pipe", "pipe", "pipe"],
       env: env
     });
@@ -176,7 +177,7 @@ for (const sqlFile of pendingMigrations) {
   try {
     const sqlContent = await readFile(join(migrationsDir, sqlFile), "utf-8");
     await new Promise((resolve, reject) => {
-      const proc = spawn("psql", [databaseUrl, "-v", "ON_ERROR_STOP=1"], {
+      const proc = spawn("psql", psqlArgs(databaseUrl, "-v", "ON_ERROR_STOP=1"), {
         stdio: ["pipe", "pipe", "pipe"],
         env: env
       });

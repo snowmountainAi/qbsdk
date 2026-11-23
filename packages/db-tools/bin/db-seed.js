@@ -8,6 +8,7 @@
 import { stat } from "fs/promises";
 import { join, resolve, isAbsolute } from "path";
 import { spawn } from "child_process";
+import { psqlArgs } from "./psql-url.js";
 import dotenv from "dotenv";
 
 console.log("Database Seeding Tool");
@@ -87,7 +88,7 @@ console.log(`Seeding database from: ${seedFile}\n`);
 // Run psql with the seed file
 async function runSeedFile() {
   return new Promise((resolve, reject) => {
-    const proc = spawn("psql", [databaseUrl, "-v", "ON_ERROR_STOP=1", "-f", seedFile], {
+    const proc = spawn("psql", psqlArgs(databaseUrl, "-v", "ON_ERROR_STOP=1", "-f", seedFile), {
       stdio: ["pipe", "pipe", "pipe"],
       env: env
     });
