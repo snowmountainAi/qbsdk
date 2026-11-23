@@ -25,3 +25,10 @@ test("unknown commands and options are rejected", () => {
   assert.throws(() => parseArgs(["server", "--tier"]), /needs a value/);
   assert.throws(() => parseArgs(["server", "extra"]), /Unexpected argument/);
 });
+
+test("frontend takes --tier and the --no-build switch", () => {
+  const { opts } = parseArgs(["frontend", "--no-build", "--tier", "dev"]);
+  assert.equal(opts["no-build"], true);
+  assert.equal(opts.tier, "dev");
+  assert.throws(() => parseArgs(["server", "--no-build"]), /not an option/);
+});

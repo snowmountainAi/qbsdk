@@ -6,7 +6,8 @@
 // the app tier's Cloud Run service. `status` and `logs` read that service.
 //
 // Usage:
-//   npx qb-deploy-gcp server [--tier dev|staging|production]
+//   npx qb-deploy-gcp server   [--tier dev|staging|production]
+//   npx qb-deploy-gcp frontend [--tier ...] [--no-build]
 //   npx qb-deploy-gcp status [--tier ...]
 //   npx qb-deploy-gcp logs   [--tier ...] [--since 1h] [--severity ERROR] [--limit 200] [--build <id>]
 //   npx qb-deploy-gcp help
@@ -24,7 +25,8 @@ import { spawn } from "node:child_process";
 import { pathToFileURL } from "node:url";
 import { loadEnv, ROOT_DIR } from "./lib/common.js";
 
-const COMMANDS = ["server", "status", "logs", "help"];
+const COMMANDS = ["server", "frontend", "status", "logs", "help"];
+const BOOLEAN_FLAGS = ["no-build"];
 const TIERS = ["production", "dev", "staging"];
 const SEVERITIES = ["DEBUG", "INFO", "NOTICE", "WARNING", "ERROR", "CRITICAL"];
 const POLL_MS = 4000;
@@ -36,6 +38,7 @@ export function parseArgs(argv, env = {}) {
   for (let i = 0; i < rest.length; i++) {
     const a = rest[i];
     if (!a.startsWith("--")) throw new Error(`Unexpected argument: ${a}`);
+    if (BOOLEAN_FLAGS.includes(a.slice(2))) { opts[a.slice(2)] = true; continue; }
     const eq = a.indexOf("=");
     const key = eq === -1 ? a.slice(2) : a.slice(2, eq);
     let value = eq === -1 ? rest[i + 1] : a.slice(eq + 1);
@@ -46,7 +49,7 @@ export function parseArgs(argv, env = {}) {
     opts[key] = value;
   }
   if (!COMMANDS.includes(command)) throw new Error(`Unknown command "${command}". Use: ${COMMANDS.join(", ")}`);
-  const allowed = { server: ["tier"], status: ["tier"], logs: ["tier", "since", "severity", "limit", "build"], help: [] }[command];
+  const allowed = { server: ["tier"], frontend: ["tier", "no-build"], status: ["tier"], logs: ["tier", "since", "severity", "limit", "build"], help: [] }[command];
   for (const k of Object.keys(opts)) {
     if (!allowed.includes(k)) throw new Error(`--${k} is not an option of "${command}"`);
   }
@@ -80,7 +83,7 @@ function config() {
     process.exit(1);
   }
   return {
-    base: `${process.env.AGENTQ_API_URL.replace(/\/+$/, "")}/projects/${encodeURIComponent(process.env.URL_SLUG)}/gcp/backend`,
+    base: `${process.env.AGENTQ_API_URL.replace(/\/+$/, "")}/projects/${encodeURIComponent(process.env.URL_SLUG)}/gcp`,
     headers: { Authorization: `Bearer ${process.env.DEPLOY_AUTH_TOKEN}` },
   };
 }
@@ -110,16 +113,19 @@ function query(params) {
 
 // tar writes to stdout: no archive path for tar to misread (GNU tar takes
 // "C:\..." for a remote host) and nothing left in tmp.
-function createArchive() {
-  const backend = join(ROOT_DIR, "backend");
-  if (!existsSync(join(backend, "package.json"))) {
-    throw new Error("backend/package.json not found. Run this from the project root.");
+function createArchive(dirs = null) {
+  if (!dirs) {
+    if (!existsSync(join(ROOT_DIR, "backend", "package.json"))) {
+      throw new Error("backend/package.json not found. Run this from the project root.");
+    }
+    dirs = ["backend", ...(existsSync(join(ROOT_DIR, "shared")) ? ["shared"] : [])];
   }
-  const dirs = ["backend", ...(existsSync(join(ROOT_DIR, "shared")) ? ["shared"] : [])];
   const args = [
     "-czf", "-",
     "--exclude=node_modules", "--exclude=.env", "--exclude=.env.*",
-    "--exclude=dist", "--exclude=.vercel", "--exclude=.git",
+    "--exclude=.vercel", "--exclude=.git",
+    // Build output is never part of the backend source (but is the frontend upload).
+    ...(dirs.includes("dist") ? [] : ["--exclude=dist"]),
     ...dirs,
   ];
   return new Promise((resolve, reject) => {
@@ -139,7 +145,7 @@ async function deployServer(cfg, opts) {
   console.log(`Uploading ${(archive.length / 1024).toFixed(0)} KB of source`);
   const form = new FormData();
   form.append("file", new Blob([archive], { type: "application/gzip" }), "backend.tar.gz");
-  const start = await api(cfg, `/deploy${query({ tier: opts.tier })}`, { method: "POST", body: form });
+  const start = await api(cfg, `/backend/deploy${query({ tier: opts.tier })}`, { method: "POST", body: form });
   console.log(`Build ${start.deployId} started for service ${start.service} (${start.region})`);
 
   let cursor;
@@ -149,7 +155,7 @@ async function deployServer(cfg, opts) {
     await new Promise((r) => setTimeout(r, POLL_MS));
     let p;
     try {
-      p = await api(cfg, `/deploys/${start.deployId}${query({ after: cursor })}`);
+      p = await api(cfg, `/backend/deploys/${start.deployId}${query({ after: cursor })}`);
     } catch (e) {
       if (e.status >= 500 || e.cause) { console.log(`   (progress check failed, retrying: ${e.message})`); continue; }
       throw e;
@@ -175,10 +181,42 @@ async function deployServer(cfg, opts) {
   return 1;
 }
 
+// ─── frontend ──────────────────────────────────────────────────────────────
+
+function run(cmd, args) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(cmd, args, { cwd: ROOT_DIR, stdio: "inherit", shell: process.platform === "win32" });
+    child.on("error", reject);
+    child.on("close", (code) => (code === 0 ? resolve() : reject(new Error(`${cmd} ${args.join(" ")} failed (${code})`))));
+  });
+}
+
+async function deployFrontend(cfg, opts) {
+  console.log(`Deploying frontend (tier: ${opts.tier})`);
+  if (!opts["no-build"]) {
+    console.log("Building: pnpm run frontend:build");
+    await run("pnpm", ["run", "frontend:build"]);
+  }
+  if (!existsSync(join(ROOT_DIR, "dist", "index.html"))) {
+    throw new Error("dist/index.html not found. The build writes to dist/ at the project root.");
+  }
+  const archive = await createArchive(["dist"]);
+  console.log(`Uploading ${(archive.length / 1024).toFixed(0)} KB`);
+  const form = new FormData();
+  form.append("file", new Blob([archive], { type: "application/gzip" }), "dist.tar.gz");
+  const r = await api(cfg, `/frontend/deploy${query({ tier: opts.tier })}`, { method: "POST", body: form });
+  console.log(`Release ${r.release} is live (${r.files} files, ${r.seconds}s)`);
+  console.log(`Frontend URL: ${r.url}`);
+  if (r.firstDeploy) {
+    console.log("First deploy of this app's hostname: it can take 2-5 minutes to reach every edge.");
+  }
+  return 0;
+}
+
 // ─── status / logs ─────────────────────────────────────────────────────────
 
 async function status(cfg, opts) {
-  const s = await api(cfg, `/status${query({ tier: opts.tier })}`);
+  const s = await api(cfg, `/backend/status${query({ tier: opts.tier })}`);
   if (!s.exists) {
     console.log(`No service yet for tier ${opts.tier}. Deploy with: npx qb-deploy-gcp server --tier ${opts.tier}`);
   } else {
@@ -198,7 +236,7 @@ async function status(cfg, opts) {
 }
 
 async function logs(cfg, opts) {
-  const r = await api(cfg, `/logs${query({ tier: opts.tier, since: opts.since, severity: opts.severity, limit: opts.limit, build: opts.build })}`);
+  const r = await api(cfg, `/backend/logs${query({ tier: opts.tier, since: opts.since, severity: opts.severity, limit: opts.limit, build: opts.build })}`);
   if (!r.logs.length) {
     console.log(opts.build ? "No log lines for that build." : "No log lines in that window. Try --since 6h.");
     return 0;
@@ -212,7 +250,8 @@ async function logs(cfg, opts) {
 function help() {
   console.log(`qb-deploy-gcp: deploy and inspect this app's backend on Google Cloud Run
 
-  npx qb-deploy-gcp server [--tier dev|staging|production]
+  npx qb-deploy-gcp server   [--tier dev|staging|production]
+  npx qb-deploy-gcp frontend [--tier ...] [--no-build]
   npx qb-deploy-gcp status [--tier ...]
   npx qb-deploy-gcp logs   [--tier ...] [--since 1h] [--severity ERROR] [--limit 200] [--build <id>]
 
@@ -234,6 +273,7 @@ export async function main(argv = process.argv.slice(2)) {
   const cfg = config();
   try {
     if (command === "server") return await deployServer(cfg, opts);
+    if (command === "frontend") return await deployFrontend(cfg, opts);
     if (command === "status") return await status(cfg, opts);
     return await logs(cfg, opts);
   } catch (e) {
