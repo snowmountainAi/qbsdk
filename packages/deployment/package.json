@@ -1,12 +1,13 @@
 {
   "name": "@qwikbuild/qbsdk-deployment",
-  "version": "3.2.5",
+  "version": "3.3.0-beta.1",
   "description": "Deployment tools for QwikBuild projects - server, frontend, and communication template deployment",
   "type": "module",
   "bin": {
     "qb-deploy-server": "./bin/deploy-server.js",
     "qb-deploy-frontend": "./bin/deploy-frontend.js",
-    "qb-deploy-cron-and-comms": "./bin/deploy-cron-and-comms.js"
+    "qb-deploy-cron-and-comms": "./bin/deploy-cron-and-comms.js",
+    "qb-deploy-gcp": "./bin/deploy-gcp.js"
   },
   "scripts": {
     "test": "node --test"
@@ -32,12 +33,14 @@
     "url": "https://github.com/snowmountainAi/qbsdk/issues"
   },
   "keywords": [
-    "deployment",
+    "cloud-run",
     "deno",
-    "vercel",
-    "s3",
+    "deployment",
     "frontend",
-    "qwikbuild"
+    "gcp",
+    "qwikbuild",
+    "s3",
+    "vercel"
   ],
   "license": "Apache-2.0"
 }
