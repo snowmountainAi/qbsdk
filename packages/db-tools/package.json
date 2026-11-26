@@ -1,6 +1,6 @@
 {
   "name": "@qwikbuild/qbsdk-db-tools",
-  "version": "1.0.1",
+  "version": "1.0.1-pullfix.1",
   "description": "Database migration and seeding tools for QwikBuild projects",
   "type": "module",
   "bin": {
@@ -13,8 +13,9 @@
   },
   "dependencies": {
     "dotenv": "^17.2.2",
+    "pg": "^8.16.3",
     "drizzle-orm": "^0.45.1",
-    "drizzle-kit": "https://github.com/IamVNIE/drizzle-orm/releases/download/0.31.8-custom.2/drizzle-kit-0.31.8-custom.2.tgz"
+    "drizzle-kit": "https://github.com/IamVNIE/drizzle-orm/releases/download/0.31.8-custom.3/drizzle-kit-0.31.8-custom.3.tgz"
   },
   "engines": {
     "node": ">=18.0.0"
