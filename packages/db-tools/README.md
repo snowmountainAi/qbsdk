@@ -50,8 +50,9 @@ npx qb-db-pull
 
 - Uses the `pg` driver (a dependency of this package), so drizzle-kit never falls back to the
   `@neondatabase/serverless` websocket driver, which can hang with no output.
-- Uses drizzle-kit 0.31.8-custom.3, which introspects with 8 connections (`DRIZZLE_KIT_POOL_MAX`)
+- Uses drizzle-kit 0.31.8-custom.4, which introspects with 8 connections (`DRIZZLE_KIT_POOL_MAX`)
   and returns key columns in order. A 252-table schema far from the database pulls in about 40 s.
+- bigserial and bigint columns are generated with `{ mode: "number" }`, so rows serialize to JSON.
 - Stops after `DB_PULL_TIMEOUT_SECONDS` (default 150). The full output is kept in
   `<tmpdir>/qb-db-pull.last.log`, and on failure the last lines are printed to stderr.
 
