@@ -21,7 +21,7 @@ import { readFileSync, existsSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn } from "node:child_process";
-import { loadEnv, requireEnvVars, ROOT_DIR } from "./lib/common.js";
+import { loadEnv, requireEnvVars, withPublicViteAliases, ROOT_DIR } from "./lib/common.js";
 
 loadEnv();
 
@@ -112,12 +112,17 @@ async function buildFrontend() {
   console.log(`   Build script: ${buildScript}`);
   console.log(`   Running: ${command}`);
 
+  const build = withPublicViteAliases(process.env);
+  if (build.names.length > 0) {
+    console.log(`   PUBLIC_* variables for the build (also as VITE_PUBLIC_*): ${build.names.join(", ")}`);
+  }
+
   return new Promise((resolve) => {
     const child = spawn(command, {
       shell: true,
       cwd: ROOT_DIR,
       stdio: "inherit",
-      env: { ...process.env },
+      env: build.env,
     });
 
     child.on("close", (code) => {

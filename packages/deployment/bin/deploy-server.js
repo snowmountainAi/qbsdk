@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import dotenv from "dotenv";
-import { loadEnv, requireEnvVars, platformApiCall, ROOT_DIR } from "./lib/common.js";
+import { loadEnv, requireEnvVars, platformApiCall, publicEnv, ROOT_DIR } from "./lib/common.js";
 import { resolveBackendRoot } from "./lib/backend-path.js";
 import { collectBackendFiles } from "./lib/collect-backend-files.js";
 import {
@@ -226,6 +226,15 @@ function buildPlatformEnv() {
     if ((key.startsWith("APP_DENO") || key.startsWith("USER_ADDED_KEY_")) && !(key in platformEnv)) {
       platformEnv[key] = value;
     }
+  }
+
+  // PUBLIC_* settings go to the backend unchanged (the frontend build gets them too).
+  const publicKeys = Object.keys(publicEnv());
+  for (const key of publicKeys) {
+    if (!(key in platformEnv)) platformEnv[key] = process.env[key];
+  }
+  if (publicKeys.length > 0) {
+    console.log(`   PUBLIC_* variables for the backend: ${publicKeys.sort().join(", ")}`);
   }
 
   return Object.fromEntries(

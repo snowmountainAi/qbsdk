@@ -51,6 +51,18 @@ npx qb-deploy-server
 - `BACKEND_DIR` — backend folder name (default: `backend`)
 - `VERCEL_DEPLOYMENT_NAME`, `VERCEL_DOMAIN` — defaults for CLI flags
 
+### PUBLIC_* variables
+
+Any non-empty variable named `PUBLIC_<NAME>` (uppercase letters, digits and `_`) in the deploy
+environment, including the root `.env`, is passed to both sides:
+
+- **Backend** (`qb-deploy-server`): added to the Vercel project env under the same name.
+- **Frontend** (`qb-deploy-frontend`): in the build env as `PUBLIC_<NAME>`, and also as
+  `VITE_PUBLIC_<NAME>`, because Vite only exposes `VITE_*` to browser code. Read it with
+  `import.meta.env.VITE_PUBLIC_<NAME>`. A `VITE_PUBLIC_<NAME>` that is already set wins.
+
+They are public by name: they end up in the browser bundle, so never put a secret in one.
+
 ### qb-deploy-frontend
 
 Builds the frontend and deploys it via the AgentQ backend. The backend handles S3 upload and platform notification, so no CDN credentials are needed on the CLI side.
